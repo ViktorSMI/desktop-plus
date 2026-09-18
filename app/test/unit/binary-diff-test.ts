@@ -104,6 +104,27 @@ describe('binary diff', () => {
     assert(diff.chunks.some(chunk => chunk.kind === 'equal-gap'))
   })
 
+  it('keeps same-offset changes aligned in repetitive data', () => {
+    const previous = Buffer.alloc(4096, 0x00)
+    const current = Buffer.from(previous)
+    current.fill(0x01, 0x40, 0x50)
+    current.fill(0x01, 0x840, 0x850)
+
+    const diff = buildBinaryDiffChunks(previous, current)
+    const changes = diff.chunks.filter(chunk => chunk.kind === 'change')
+
+    assert.equal(diff.changeCount, 2)
+    assert.equal(changes[0].previousOffset, 0x40)
+    assert.equal(changes[0].currentOffset, 0x40)
+    assert.equal(changes[0].previousLength, 0x10)
+    assert.equal(changes[0].currentLength, 0x10)
+
+    assert.equal(changes[1].previousOffset, 0x840)
+    assert.equal(changes[1].currentOffset, 0x840)
+    assert.equal(changes[1].previousLength, 0x10)
+    assert.equal(changes[1].currentLength, 0x10)
+  })
+
   it('bounds the rendered data for a huge changed region', () => {
     const previous = Buffer.alloc(16 * 1024, 0x00)
     const current = Buffer.alloc(16 * 1024, 0xff)

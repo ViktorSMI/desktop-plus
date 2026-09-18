@@ -230,10 +230,7 @@ export class IssueList extends React.Component<
             tooltip={item.issue.title}
             onlyWhenOverflowed={true}
           >
-            <HighlightText
-              text={item.issue.title}
-              highlight={matches.title}
-            />
+            <HighlightText text={item.issue.title} highlight={matches.title} />
           </TooltippedContent>
           <TooltippedContent
             tagName="div"
@@ -272,12 +269,15 @@ export class IssueList extends React.Component<
 
   private renderListHeader = () => (
     <div className="filter-list-group-header">
-      Open issues in {getNonForkGitHubRepository(this.props.repository).fullName}
+      Open issues in{' '}
+      {getNonForkGitHubRepository(this.props.repository).fullName}
     </div>
   )
 
   private getListAriaLabel = () =>
-    `Open issues in ${getNonForkGitHubRepository(this.props.repository).fullName}`
+    `Open issues in ${
+      getNonForkGitHubRepository(this.props.repository).fullName
+    }`
 
   private renderPostFilter = () => {
     const tooltip = 'Refresh the list of issues'

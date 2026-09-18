@@ -2183,10 +2183,7 @@ export class API {
 
       return await parsedResponse<IAPIIssue>(response)
     } catch (e) {
-      log.warn(
-        `fetchIssue: failed for ${owner}/${name}#${issueNumber}`,
-        e
-      )
+      log.warn(`fetchIssue: failed for ${owner}/${name}#${issueNumber}`, e)
       return null
     }
   }
@@ -4577,10 +4574,7 @@ export class GitLabAPI extends API {
         await parsedResponse<IGitLabAPIIssue>(response)
       )
     } catch (e) {
-      log.warn(
-        `fetchIssue: failed for ${owner}/${name}#${issueNumber}`,
-        e
-      )
+      log.warn(`fetchIssue: failed for ${owner}/${name}#${issueNumber}`, e)
       return null
     }
   }

@@ -127,8 +127,8 @@ export class IssueDetail extends React.Component<IIssueDetailProps> {
             comments.map(comment => (
               <article className="issue-comment" key={comment.id}>
                 <div className="issue-comment-meta">
-                  <strong>{comment.user.login}</strong>{' '}
-                  commented {formatTimestamp(comment.created_at)}
+                  <strong>{comment.user.login}</strong> commented{' '}
+                  {formatTimestamp(comment.created_at)}
                 </div>
                 <SandboxedMarkdown
                   markdown={comment.body}

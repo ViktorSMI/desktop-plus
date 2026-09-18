@@ -29,8 +29,8 @@ export interface IBinaryDiffChunks {
 }
 
 function getEqualRun(
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>,
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>,
   previousOffset: number,
   currentOffset: number,
   previousLimit: number,
@@ -50,8 +50,8 @@ function getEqualRun(
 }
 
 function getCommonSuffixLength(
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>,
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>,
   previousStart: number,
   currentStart: number
 ) {
@@ -70,8 +70,8 @@ function getCommonSuffixLength(
 }
 
 function bytesEqual(
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>,
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>,
   previousOffset: number,
   currentOffset: number,
   length: number
@@ -97,7 +97,7 @@ function getHashPower() {
 
 const HashPower = getHashPower()
 
-function getWindowHash(data: ReadonlyArray<number>, offset: number) {
+function getWindowHash(data: ArrayLike<number>, offset: number) {
   let hash = 0
 
   for (let i = 0; i < AnchorSize; i++) {
@@ -118,8 +118,8 @@ function slideWindowHash(
 }
 
 function findDiagonalResyncPoint(
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>,
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>,
   previousOffset: number,
   currentOffset: number,
   previousLimit: number,
@@ -182,8 +182,8 @@ function findDiagonalResyncPoint(
  * modified.
  */
 function findResyncPoint(
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>,
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>,
   previousOffset: number,
   currentOffset: number,
   previousLimit: number,
@@ -307,8 +307,8 @@ function findResyncPoint(
 }
 
 function buildRawChunks(
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>
 ): ReadonlyArray<IRawBinaryDiffChunk> {
   const chunks: IRawBinaryDiffChunk[] = []
 
@@ -422,7 +422,7 @@ function buildRawChunks(
 }
 
 function copyBytes(
-  data: ReadonlyArray<number>,
+  data: ArrayLike<number>,
   offset: number,
   length: number
 ) {
@@ -437,8 +437,8 @@ function copyBytes(
 
 function createDataChunk(
   kind: 'equal' | 'change',
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>,
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>,
   previousOffset: number,
   currentOffset: number,
   previousLength: number,
@@ -461,8 +461,8 @@ function appendEqualChunks(
   result: IBinaryDiffChunk[],
   rawChunks: ReadonlyArray<IRawBinaryDiffChunk>,
   index: number,
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>
 ) {
   const chunk = rawChunks[index]
   const hasChangeBefore = rawChunks[index - 1]?.kind === 'change'
@@ -539,8 +539,8 @@ function appendEqualChunks(
 function appendChangeChunks(
   result: IBinaryDiffChunk[],
   chunk: IRawBinaryDiffChunk,
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>
 ) {
   const changeIndex = chunk.changeIndex
   const largestLength = Math.max(chunk.previousLength, chunk.currentLength)
@@ -630,8 +630,8 @@ function appendChangeChunks(
  * unchanged ranges, and bounded previews for very large changed regions.
  */
 export function buildBinaryDiffChunks(
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>
+  previous: ArrayLike<number>,
+  current: ArrayLike<number>
 ): IBinaryDiffChunks {
   const rawChunks = buildRawChunks(previous, current)
   const changeCount = rawChunks.reduce(

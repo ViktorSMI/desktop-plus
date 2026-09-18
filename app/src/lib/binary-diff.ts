@@ -122,6 +122,61 @@ function slideWindowHash(
   ) >>> 0
 }
 
+function findDiagonalResyncPoint(
+  previous: ReadonlyArray<number>,
+  current: ReadonlyArray<number>,
+  previousOffset: number,
+  currentOffset: number,
+  previousLimit: number,
+  currentLimit: number
+): IResyncPoint | null {
+  const lastDelta = Math.min(
+    previousLimit - AnchorSize - previousOffset,
+    currentLimit - AnchorSize - currentOffset,
+    ResyncSearchBytes
+  )
+
+  if (lastDelta < 1) {
+    return null
+  }
+
+  let previousHash = getWindowHash(previous, previousOffset + 1)
+  let currentHash = getWindowHash(current, currentOffset + 1)
+
+  for (let delta = 1; delta <= lastDelta; delta++) {
+    if (
+      previousHash === currentHash &&
+      bytesEqual(
+        previous,
+        current,
+        previousOffset + delta,
+        currentOffset + delta,
+        AnchorSize
+      )
+    ) {
+      return {
+        previousOffset: previousOffset + delta,
+        currentOffset: currentOffset + delta,
+      }
+    }
+
+    if (delta < lastDelta) {
+      previousHash = slideWindowHash(
+        previousHash,
+        previous[previousOffset + delta],
+        previous[previousOffset + delta + AnchorSize]
+      )
+      currentHash = slideWindowHash(
+        currentHash,
+        current[currentOffset + delta],
+        current[currentOffset + delta + AnchorSize]
+      )
+    }
+  }
+
+  return null
+}
+
 /**
  * Locate a nearby equal byte run after a mismatch. This is deliberately
  * bounded: binary files can be very large and a byte-level Myers diff has
@@ -139,6 +194,19 @@ function findResyncPoint(
   previousLimit: number,
   currentLimit: number
 ): IResyncPoint | null {
+  const diagonal = findDiagonalResyncPoint(
+    previous,
+    current,
+    previousOffset,
+    currentOffset,
+    previousLimit,
+    currentLimit
+  )
+
+  if (diagonal !== null) {
+    return diagonal
+  }
+
   const previousLastStart = Math.min(
     previousLimit - AnchorSize,
     previousOffset + ResyncSearchBytes

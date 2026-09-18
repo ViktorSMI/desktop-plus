@@ -1,0 +1,39 @@
+name: Format binary diff
+
+on:
+  push:
+    branches:
+      - binary-diff-viewer
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: binary-diff-viewer
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: yarn
+      - run: yarn
+      - name: Format binary diff files
+        run: >
+          yarn prettier --write
+          app/src/lib/binary-diff.ts
+          app/src/ui/diff/binary-file.tsx
+          app/styles/ui/_diff.scss
+      - name: Commit formatting
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/lib/binary-diff.ts app/src/ui/diff/binary-file.tsx app/styles/ui/_diff.scss
+          git commit -m "Format binary diff files"
+          git push origin HEAD:binary-diff-viewer

@@ -1,18 +1,7 @@
-exit=1
+exit=0
 yarn run v1.21.1
 $ yarn eslint-check && yarn eslint
 $ eslint --print-config .eslintrc.* | eslint-config-prettier-check
 No rules that are unnecessary or conflict with Prettier were found.
 $ eslint --cache --rulesdir ./eslint-rules "./eslint-rules/**/*.js" "./script/**/*.ts{,x}" "./app/{src,typings,test}/**/*.{j,t}s{,x}" "./changelog.json"
-
-/home/runner/work/desktop-plus/desktop-plus/app/src/ui/diff/binary-file.tsx
-  102:29  error  componentDidUpdate has parameter previousProps which does not match expected name prevProps  react-proper-lifecycle-methods
-  314:11  error  JSX props should not use arrow functions                                                     react/jsx-no-bind
-  369:9   error  JSX props should not use arrow functions                                                     react/jsx-no-bind
-
-✖ 3 problems (3 errors, 0 warnings)
-
-error Command failed with exit code 1.
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.
-error Command failed with exit code 1.
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.
+Done in 20.94s.

@@ -150,8 +150,8 @@ export class BinaryFile extends React.Component<
         cell === undefined
           ? undefined
           : side === 'previous'
-            ? cell.previousByte
-            : cell.currentByte
+          ? cell.previousByte
+          : cell.currentByte
       const changed = cell?.changed === true
       const changeClass =
         changed && value !== undefined
@@ -190,8 +190,8 @@ export class BinaryFile extends React.Component<
         cell === undefined
           ? undefined
           : side === 'previous'
-            ? cell.previousByte
-            : cell.currentByte
+          ? cell.previousByte
+          : cell.currentByte
       const changed = cell?.changed === true
       const changeClass =
         changed && value !== undefined
@@ -215,10 +215,7 @@ export class BinaryFile extends React.Component<
     return spans
   }
 
-  private appendChunkCells(
-    cells: IBinaryDiffCell[],
-    chunk: IBinaryDiffChunk
-  ) {
+  private appendChunkCells(cells: IBinaryDiffCell[], chunk: IBinaryDiffChunk) {
     const cellCount = Math.max(
       chunk.previousData.length,
       chunk.currentData.length
@@ -233,13 +230,9 @@ export class BinaryFile extends React.Component<
         previousByte,
         currentByte,
         previousOffset:
-          previousByte === undefined
-            ? undefined
-            : chunk.previousOffset + index,
+          previousByte === undefined ? undefined : chunk.previousOffset + index,
         currentOffset:
-          currentByte === undefined
-            ? undefined
-            : chunk.currentOffset + index,
+          currentByte === undefined ? undefined : chunk.currentOffset + index,
         changed: isChange && previousByte !== currentByte,
         changeIndex: isChange ? chunk.changeIndex : undefined,
       })
@@ -262,8 +255,7 @@ export class BinaryFile extends React.Component<
     }
 
     const firstCell = cells[0]
-    const firstOffset =
-      firstCell.previousOffset ?? firstCell.currentOffset ?? 0
+    const firstOffset = firstCell.previousOffset ?? firstCell.currentOffset ?? 0
     const leadingCells = firstOffset % BytesPerRow
 
     if (leadingCells > 0) {
@@ -287,8 +279,7 @@ export class BinaryFile extends React.Component<
           rowCells
             .map(cell => cell.changeIndex)
             .filter(
-              (changeIndex): changeIndex is number =>
-                changeIndex !== undefined
+              (changeIndex): changeIndex is number => changeIndex !== undefined
             )
         )
       )
@@ -300,9 +291,7 @@ export class BinaryFile extends React.Component<
         seenChanges.add(changeIndex)
       }
 
-      const isActive = rowChanges.includes(
-        this.state.activeChangeIndex
-      )
+      const isActive = rowChanges.includes(this.state.activeChangeIndex)
       const previousOffset = getRowOffset(rowCells, 'previous')
       const currentOffset = getRowOffset(rowCells, 'current')
       const ref =
@@ -325,9 +314,7 @@ export class BinaryFile extends React.Component<
           ref={ref}
         >
           <td className="hex-offset">
-            {previousOffset === undefined
-              ? ''
-              : formatOffset(previousOffset)}
+            {previousOffset === undefined ? '' : formatOffset(previousOffset)}
           </td>
           <td className="hex-bytes">
             {this.renderHexCells(rowCells, 'previous')}
@@ -336,9 +323,7 @@ export class BinaryFile extends React.Component<
             {this.renderAsciiCells(rowCells, 'previous')}
           </td>
           <td className="hex-offset">
-            {currentOffset === undefined
-              ? ''
-              : formatOffset(currentOffset)}
+            {currentOffset === undefined ? '' : formatOffset(currentOffset)}
           </td>
           <td className="hex-bytes">
             {this.renderHexCells(rowCells, 'current')}
@@ -353,15 +338,10 @@ export class BinaryFile extends React.Component<
     return rows
   }
 
-  private renderGap(
-    chunk: IBinaryDiffChunk,
-    key: string,
-    captureRef: boolean
-  ) {
+  private renderGap(chunk: IBinaryDiffChunk, key: string, captureRef: boolean) {
     const isChange = chunk.kind === 'change-gap'
     const changeIndex = chunk.changeIndex
-    const isActive =
-      isChange && changeIndex === this.state.activeChangeIndex
+    const isActive = isChange && changeIndex === this.state.activeChangeIndex
 
     const ref =
       captureRef && changeIndex !== undefined
@@ -404,9 +384,7 @@ export class BinaryFile extends React.Component<
         return
       }
 
-      rows.push(
-        ...this.renderCellGroup(group, groupIndex++, seenChanges)
-      )
+      rows.push(...this.renderCellGroup(group, groupIndex++, seenChanges))
       group.length = 0
     }
 
@@ -426,13 +404,7 @@ export class BinaryFile extends React.Component<
         seenChanges.add(changeIndex)
       }
 
-      rows.push(
-        this.renderGap(
-          chunk,
-          `gap-${chunkIndex}`,
-          captureRef
-        )
-      )
+      rows.push(this.renderGap(chunk, `gap-${chunkIndex}`, captureRef))
     })
 
     flushGroup()
@@ -446,10 +418,7 @@ export class BinaryFile extends React.Component<
       return null
     }
 
-    if (
-      diff.previousSize === undefined &&
-      diff.currentSize === undefined
-    ) {
+    if (diff.previousSize === undefined && diff.currentSize === undefined) {
       return (
         <div className="binary-diff-notice">
           Binary conflict contents are not available for inline comparison.
@@ -489,19 +458,13 @@ export class BinaryFile extends React.Component<
       )
     }
 
-    return (
-      <div className="binary-diff-empty">
-        No byte differences found.
-      </div>
-    )
+    return <div className="binary-diff-empty">No byte differences found.</div>
   }
 
   public render() {
     const diff = this.props.diff
     const hasChanges = diff.changeCount > 0
-    const currentDifference = hasChanges
-      ? this.state.activeChangeIndex + 1
-      : 0
+    const currentDifference = hasChanges ? this.state.activeChangeIndex + 1 : 0
 
     return (
       <div className="panel binary binary-diff" id="diff">
@@ -520,9 +483,7 @@ export class BinaryFile extends React.Component<
             <Button
               size="small"
               onClick={this.previousChange}
-              disabled={
-                !hasChanges || this.state.activeChangeIndex === 0
-              }
+              disabled={!hasChanges || this.state.activeChangeIndex === 0}
             >
               Previous
             </Button>

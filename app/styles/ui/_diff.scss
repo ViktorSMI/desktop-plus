@@ -1129,9 +1129,7 @@
   }
 
   .hex-diff-row.active td {
-    box-shadow:
-      inset 0 1px 0 var(--focus-color),
-      inset 0 -1px 0 var(--focus-color);
+    box-shadow: inset 0 1px 0 var(--focus-color), inset 0 -1px 0 var(--focus-color);
   }
 
   .hex-diff-gap td {
@@ -1148,9 +1146,7 @@
   }
 
   .hex-diff-gap.active td {
-    box-shadow:
-      inset 0 1px 0 var(--focus-color),
-      inset 0 -1px 0 var(--focus-color);
+    box-shadow: inset 0 1px 0 var(--focus-color), inset 0 -1px 0 var(--focus-color);
   }
 }
 

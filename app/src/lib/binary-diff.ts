@@ -112,14 +112,9 @@ function slideWindowHash(
   outgoingByte: number,
   incomingByte: number
 ) {
-  const withoutOutgoing =
-    (hash - Math.imul(outgoingByte + 1, HashPower)) >>> 0
+  const withoutOutgoing = (hash - Math.imul(outgoingByte + 1, HashPower)) >>> 0
 
-  return (
-    Math.imul(withoutOutgoing, HashBase) +
-    incomingByte +
-    1
-  ) >>> 0
+  return (Math.imul(withoutOutgoing, HashBase) + incomingByte + 1) >>> 0
 }
 
 function findDiagonalResyncPoint(
@@ -216,10 +211,7 @@ function findResyncPoint(
     currentOffset + ResyncSearchBytes
   )
 
-  if (
-    previousLastStart < previousOffset ||
-    currentLastStart < currentOffset
-  ) {
+  if (previousLastStart < previousOffset || currentLastStart < currentOffset) {
     return null
   }
 
@@ -484,10 +476,7 @@ function appendEqualChunks(
     ? Math.min(ContextBytes, chunk.previousLength)
     : 0
   const keepAtEnd = hasChangeAfter
-    ? Math.min(
-        ContextBytes,
-        Math.max(0, chunk.previousLength - keepAtStart)
-      )
+    ? Math.min(ContextBytes, Math.max(0, chunk.previousLength - keepAtStart))
     : 0
 
   if (chunk.previousLength <= keepAtStart + keepAtEnd) {
@@ -554,10 +543,7 @@ function appendChangeChunks(
   current: ReadonlyArray<number>
 ) {
   const changeIndex = chunk.changeIndex
-  const largestLength = Math.max(
-    chunk.previousLength,
-    chunk.currentLength
-  )
+  const largestLength = Math.max(chunk.previousLength, chunk.currentLength)
 
   if (largestLength <= MaxChangePreviewBytes) {
     result.push(
@@ -587,14 +573,8 @@ function appendChangeChunks(
   const remainingPrevious = chunk.previousLength - firstPreviousLength
   const remainingCurrent = chunk.currentLength - firstCurrentLength
 
-  const lastPreviousLength = Math.min(
-    ChangeEdgePreviewBytes,
-    remainingPrevious
-  )
-  const lastCurrentLength = Math.min(
-    ChangeEdgePreviewBytes,
-    remainingCurrent
-  )
+  const lastPreviousLength = Math.min(ChangeEdgePreviewBytes, remainingPrevious)
+  const lastCurrentLength = Math.min(ChangeEdgePreviewBytes, remainingCurrent)
 
   if (firstPreviousLength > 0 || firstCurrentLength > 0) {
     result.push(

@@ -97,11 +97,9 @@ export class BinaryFile extends React.Component<
     activeChangeIndex: 0,
   }
 
-  private readonly changeRows = new Map<number, HTMLTableRowElement>()
-
-  public componentDidUpdate(previousProps: IBinaryFileProps) {
+  public componentDidUpdate(prevProps: IBinaryFileProps) {
     if (
-      previousProps.diff !== this.props.diff &&
+      prevProps.diff !== this.props.diff &&
       this.state.activeChangeIndex !== 0
     ) {
       this.setState({ activeChangeIndex: 0 })
@@ -122,11 +120,17 @@ export class BinaryFile extends React.Component<
       return
     }
 
-    this.setState({ activeChangeIndex: changeIndex }, () => {
-      this.changeRows.get(changeIndex)?.scrollIntoView({
-        block: 'center',
-        behavior: 'smooth',
-      })
+    this.setState({ activeChangeIndex: changeIndex }, this.scrollToActiveChange)
+  }
+
+  private scrollToActiveChange = () => {
+    const element = document.querySelector<HTMLTableRowElement>(
+      `#diff [data-binary-changes~="${this.state.activeChangeIndex}"]`
+    )
+
+    element?.scrollIntoView({
+      block: 'center',
+      behavior: 'smooth',
     })
   }
 
@@ -294,24 +298,15 @@ export class BinaryFile extends React.Component<
       const isActive = rowChanges.includes(this.state.activeChangeIndex)
       const previousOffset = getRowOffset(rowCells, 'previous')
       const currentOffset = getRowOffset(rowCells, 'current')
-      const ref =
-        changesToCapture.length > 0
-          ? (element: HTMLTableRowElement | null) => {
-              for (const changeIndex of changesToCapture) {
-                if (element === null) {
-                  this.changeRows.delete(changeIndex)
-                } else {
-                  this.changeRows.set(changeIndex, element)
-                }
-              }
-            }
-          : undefined
-
       rows.push(
         <tr
           className={`hex-diff-row${isActive ? ' active' : ''}`}
           key={`group-${groupIndex}-row-${row}`}
-          ref={ref}
+          data-binary-changes={
+            changesToCapture.length > 0
+              ? changesToCapture.join(' ')
+              : undefined
+          }
         >
           <td className="hex-offset">
             {previousOffset === undefined ? '' : formatOffset(previousOffset)}
@@ -343,17 +338,6 @@ export class BinaryFile extends React.Component<
     const changeIndex = chunk.changeIndex
     const isActive = isChange && changeIndex === this.state.activeChangeIndex
 
-    const ref =
-      captureRef && changeIndex !== undefined
-        ? (element: HTMLTableRowElement | null) => {
-            if (element === null) {
-              this.changeRows.delete(changeIndex)
-            } else {
-              this.changeRows.set(changeIndex, element)
-            }
-          }
-        : undefined
-
     const message = isChange
       ? `… changed bytes hidden: ${formatInteger(
           chunk.previousLength
@@ -366,7 +350,9 @@ export class BinaryFile extends React.Component<
           isActive ? ' active' : ''
         }`}
         key={key}
-        ref={ref}
+        data-binary-changes={
+          captureRef && changeIndex !== undefined ? changeIndex : undefined
+        }
       >
         <td colSpan={6}>{message}</td>
       </tr>

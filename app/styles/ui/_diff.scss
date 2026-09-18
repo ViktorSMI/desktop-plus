@@ -1128,7 +1128,7 @@
     background: var(--box-alt-background-color);
   }
 
-  .hex-diff-change.active td {
+  .hex-diff-row.active td {
     box-shadow:
       inset 0 1px 0 var(--focus-color),
       inset 0 -1px 0 var(--focus-color);

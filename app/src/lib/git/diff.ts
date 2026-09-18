@@ -20,12 +20,12 @@ import {
   parseLineEndingText,
   ILargeTextDiff,
   IBinaryDiff,
-  IBinaryFileContents,
 } from '../../models/diff'
 
 import { DiffParser } from '../diff-parser'
+import { buildBinaryDiffChunks } from '../binary-diff'
 import { getOldPathOrDefault } from '../get-old-path'
-import { open, readFile, writeFile, unlink } from 'fs/promises'
+import { open, readFile, stat, writeFile, unlink } from 'fs/promises'
 import { getTempFilePath } from '../file-system'
 import { forceUnwrap } from '../fatal-error'
 import { git } from './core'
@@ -62,8 +62,19 @@ const MaxReasonableDiffSize = MaxDiffBufferSize / 16 // ~4.375MB in decimal
  */
 const MaxCharactersPerLine = 5000
 
-/** Maximum number of bytes to load from each side of a binary diff preview. */
-const MaxBinaryDiffPreviewBytes = 64 * 1024
+/**
+ * Maximum number of bytes to compare from each side of a binary file.
+ *
+ * The renderer only receives compact diff chunks, so this can be much larger
+ * than the old 64 KiB prefix preview without creating millions of DOM nodes.
+ */
+const MaxBinaryDiffCompareBytes = 64 * 1024 * 1024
+
+interface IBinaryFileContents {
+  readonly data: Buffer
+  readonly size: number
+  readonly truncated: boolean
+}
 
 /**
  * Utility function to check whether parsing this buffer is going to cause
@@ -622,16 +633,33 @@ async function getBlobBinaryContents(
     repository,
     commitish,
     path,
-    MaxBinaryDiffPreviewBytes + 1
+    MaxBinaryDiffCompareBytes + 1
   )
 
   if (contents === null) {
     return undefined
   }
 
+  let size = contents.length
+  const truncated = contents.length > MaxBinaryDiffCompareBytes
+
+  if (truncated) {
+    const result = await git(
+      ['cat-file', '-s', `${commitish}:${path}`],
+      repository.path,
+      'getBinaryBlobSize'
+    )
+    const parsedSize = Number.parseInt(result.stdout.trim(), 10)
+
+    if (!Number.isNaN(parsedSize)) {
+      size = parsedSize
+    }
+  }
+
   return {
-    data: Array.from(contents.subarray(0, MaxBinaryDiffPreviewBytes)),
-    truncated: contents.length > MaxBinaryDiffPreviewBytes,
+    data: contents.subarray(0, MaxBinaryDiffCompareBytes),
+    size,
+    truncated,
   }
 }
 
@@ -639,17 +667,19 @@ async function getWorkingDirectoryBinaryContents(
   repository: Repository,
   file: FileChange
 ): Promise<IBinaryFileContents> {
-  const handle = await open(Path.join(repository.path, file.path), 'r')
+  const fullPath = Path.join(repository.path, file.path)
+  const fileStats = await stat(fullPath)
+  const bytesToRead = Math.min(fileStats.size, MaxBinaryDiffCompareBytes)
+  const handle = await open(fullPath, 'r')
 
   try {
-    const buffer = Buffer.alloc(MaxBinaryDiffPreviewBytes + 1)
+    const buffer = Buffer.alloc(bytesToRead)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
 
     return {
-      data: Array.from(
-        buffer.subarray(0, Math.min(bytesRead, MaxBinaryDiffPreviewBytes))
-      ),
-      truncated: bytesRead > MaxBinaryDiffPreviewBytes,
+      data: buffer.subarray(0, bytesRead),
+      size: fileStats.size,
+      truncated: fileStats.size > MaxBinaryDiffCompareBytes,
     }
   } finally {
     await handle.close()
@@ -667,7 +697,12 @@ async function getBinaryDiff(
 
   if (file instanceof WorkingDirectoryFileChange) {
     if (file.status.kind === AppFileStatusKind.Conflicted) {
-      return { kind: DiffType.Binary }
+      return {
+        kind: DiffType.Binary,
+        chunks: [],
+        changeCount: 0,
+        complete: false,
+      }
     }
 
     if (file.status.kind !== AppFileStatusKind.Deleted) {
@@ -717,10 +752,21 @@ async function getBinaryDiff(
     }
   }
 
+  const empty = Buffer.alloc(0)
+  const binaryDiff = buildBinaryDiffChunks(
+    previous?.data ?? empty,
+    current?.data ?? empty
+  )
+
   return {
     kind: DiffType.Binary,
-    previous,
-    current,
+    previousSize: previous?.size,
+    currentSize: current?.size,
+    previousComparedBytes: previous?.data.length,
+    currentComparedBytes: current?.data.length,
+    chunks: binaryDiff.chunks,
+    changeCount: binaryDiff.changeCount,
+    complete: previous?.truncated !== true && current?.truncated !== true,
   }
 }
 

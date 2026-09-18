@@ -44,6 +44,9 @@ jobs:
           p = Path('app/test/e2e/issue-reader-driver.ts')
           s = p.read_text().replace('  interface Window {', '  // Augment the native browser interface; its name is fixed by lib.dom.d.ts.\n  // eslint-disable-next-line @typescript-eslint/naming-convention\n  interface Window {')
           p.write_text(s)
+          p = Path('app/webpack.common.ts')
+          s = p.read_text().replace("        include: path.resolve(__dirname, 'src'),", "        include: [\n          path.resolve(__dirname, 'src'),\n          // Keep fixture code out of normal production builds.\n          ...(process.env.DESKTOP_E2E === '1'\n            ? [path.resolve(__dirname, 'test/e2e/issue-reader-driver.ts')]\n            : []),\n        ],", 1)
+          p.write_text(s)
           PY
           git rm .github/issue-reader-changes.*.gzpart .github/workflows/issue-reader-development.yml
       - name: Install Electron display dependencies

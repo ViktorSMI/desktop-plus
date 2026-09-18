@@ -105,7 +105,6 @@ export class BinaryFile extends React.Component<IBinaryFileProps, {}> {
         <span
           className={`hex-byte${changeClass}`}
           key={column}
-          title={`0x${byteOffset.toString(16).toUpperCase()}`}
         >
           {value === undefined
             ? '  '

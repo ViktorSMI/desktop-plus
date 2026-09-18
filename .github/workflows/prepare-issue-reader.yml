@@ -51,8 +51,11 @@ jobs:
                 })`
           )
           fs.writeFileSync(reader, content)
-          const test = 'script/issue-reader-layout-test.mjs'
-          content = fs.readFileSync(test, 'utf8').replace('app/src/ui/dialog/is-top-most.ts', 'app/src/ui/dialog/is-top-most.tsx')
+          const originalTest = 'script/issue-reader-layout-test.mjs'
+          const test = 'script/check-issue-reader-layout.mjs'
+          content = fs.readFileSync(originalTest, 'utf8').replace('app/src/ui/dialog/is-top-most.ts', 'app/src/ui/dialog/is-top-most.tsx')
+          content = content.replace('node script/issue-reader-layout-test.mjs', 'node script/check-issue-reader-layout.mjs')
+          content = content.replace("file: path.join(root, 'app/styles/ui/_dialog.scss')", "file: path.relative(process.cwd(), path.join(root, 'app/styles/ui/_dialog.scss'))")
           content = content.replace("      'react': React,", `      'react': React,
                 'memoize-one': {__esModule:true, default: fn => {
                   let lastArgs, value;
@@ -65,22 +68,23 @@ jobs:
                   };
                 }},`)
           fs.writeFileSync(test, content)
+          fs.unlinkSync(originalTest)
           NODE
       - name: Apply project formatting
         run: |
           yarn prettier --write
-          ./node_modules/.bin/prettier --write script/issue-reader-layout-test.mjs
+          ./node_modules/.bin/prettier --write script/check-issue-reader-layout.mjs
       - name: Run full lint
         run: yarn lint
-      - name: Compile production app
-        run: yarn compile:prod
-      - name: Run script tests
-        run: yarn test:script
       - name: Install browser for layout regression tests
         run: npx playwright install --with-deps chromium
       - name: Test issue reader in browser
         timeout-minutes: 5
-        run: node script/issue-reader-layout-test.mjs
+        run: node script/check-issue-reader-layout.mjs
+      - name: Compile production app
+        run: yarn compile:prod
+      - name: Run script tests
+        run: yarn test:script
       - name: Upload layout screenshots
         if: always()
         uses: actions/upload-artifact@v7
@@ -92,6 +96,7 @@ jobs:
         run: |
           git rm .github/prepare-issue-reader.cjs .github/workflows/prepare-issue-reader.yml
           git add -u
+          git add script/check-issue-reader-layout.mjs
           git diff --cached --check
           git diff --cached --stat
           git config user.name 'github-actions[bot]'

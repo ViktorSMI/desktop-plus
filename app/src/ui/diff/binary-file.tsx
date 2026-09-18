@@ -24,6 +24,15 @@ interface IBinaryFileState {
   readonly activeChangeIndex: number
 }
 
+interface IBinaryDiffCell {
+  readonly previousByte?: number
+  readonly currentByte?: number
+  readonly previousOffset?: number
+  readonly currentOffset?: number
+  readonly changed: boolean
+  readonly changeIndex?: number
+}
+
 function formatOffset(offset: number) {
   return offset.toString(16).padStart(8, '0').toUpperCase()
 }
@@ -59,6 +68,24 @@ function byteToAscii(value: number | undefined) {
   }
 
   return value >= 0x20 && value <= 0x7e ? String.fromCharCode(value) : '·'
+}
+
+function getRowOffset(
+  cells: ReadonlyArray<IBinaryDiffCell>,
+  side: 'previous' | 'current'
+) {
+  for (let column = 0; column < cells.length; column++) {
+    const offset =
+      side === 'previous'
+        ? cells[column].previousOffset
+        : cells[column].currentOffset
+
+    if (offset !== undefined) {
+      return Math.max(0, offset - column)
+    }
+  }
+
+  return undefined
 }
 
 /** Renders an HxD/WinMerge-style side-by-side binary comparison. */
@@ -111,23 +138,21 @@ export class BinaryFile extends React.Component<
     this.selectChange(this.state.activeChangeIndex + 1)
   }
 
-  private renderHexBytes(
-    chunk: IBinaryDiffChunk,
-    rowStart: number,
+  private renderHexCells(
+    cells: ReadonlyArray<IBinaryDiffCell>,
     side: 'previous' | 'current'
   ) {
-    const previous = chunk.previousData
-    const current = chunk.currentData
-    const selected = side === 'previous' ? previous : current
     const spans: React.ReactNode[] = []
 
     for (let column = 0; column < BytesPerRow; column++) {
-      const index = rowStart + column
-      const previousByte = previous[index]
-      const currentByte = current[index]
-      const value = selected[index]
-      const changed =
-        chunk.kind === 'change' && previousByte !== currentByte
+      const cell = cells[column]
+      const value =
+        cell === undefined
+          ? undefined
+          : side === 'previous'
+            ? cell.previousByte
+            : cell.currentByte
+      const changed = cell?.changed === true
       const changeClass =
         changed && value !== undefined
           ? side === 'previous'
@@ -153,23 +178,21 @@ export class BinaryFile extends React.Component<
     return spans
   }
 
-  private renderAsciiBytes(
-    chunk: IBinaryDiffChunk,
-    rowStart: number,
+  private renderAsciiCells(
+    cells: ReadonlyArray<IBinaryDiffCell>,
     side: 'previous' | 'current'
   ) {
-    const previous = chunk.previousData
-    const current = chunk.currentData
-    const selected = side === 'previous' ? previous : current
     const spans: React.ReactNode[] = []
 
     for (let column = 0; column < BytesPerRow; column++) {
-      const index = rowStart + column
-      const previousByte = previous[index]
-      const currentByte = current[index]
-      const value = selected[index]
-      const changed =
-        chunk.kind === 'change' && previousByte !== currentByte
+      const cell = cells[column]
+      const value =
+        cell === undefined
+          ? undefined
+          : side === 'previous'
+            ? cell.previousByte
+            : cell.currentByte
+      const changed = cell?.changed === true
       const changeClass =
         changed && value !== undefined
           ? side === 'previous'
@@ -190,6 +213,144 @@ export class BinaryFile extends React.Component<
     }
 
     return spans
+  }
+
+  private appendChunkCells(
+    cells: IBinaryDiffCell[],
+    chunk: IBinaryDiffChunk
+  ) {
+    const cellCount = Math.max(
+      chunk.previousData.length,
+      chunk.currentData.length
+    )
+
+    for (let index = 0; index < cellCount; index++) {
+      const previousByte = chunk.previousData[index]
+      const currentByte = chunk.currentData[index]
+      const isChange = chunk.kind === 'change'
+
+      cells.push({
+        previousByte,
+        currentByte,
+        previousOffset:
+          previousByte === undefined
+            ? undefined
+            : chunk.previousOffset + index,
+        currentOffset:
+          currentByte === undefined
+            ? undefined
+            : chunk.currentOffset + index,
+        changed: isChange && previousByte !== currentByte,
+        changeIndex: isChange ? chunk.changeIndex : undefined,
+      })
+    }
+  }
+
+  private renderCellGroup(
+    chunks: ReadonlyArray<IBinaryDiffChunk>,
+    groupIndex: number,
+    seenChanges: Set<number>
+  ) {
+    const cells: IBinaryDiffCell[] = []
+
+    for (const chunk of chunks) {
+      this.appendChunkCells(cells, chunk)
+    }
+
+    if (cells.length === 0) {
+      return []
+    }
+
+    const firstCell = cells[0]
+    const firstOffset =
+      firstCell.previousOffset ?? firstCell.currentOffset ?? 0
+    const leadingCells = firstOffset % BytesPerRow
+
+    if (leadingCells > 0) {
+      const padding: IBinaryDiffCell[] = []
+
+      for (let i = 0; i < leadingCells; i++) {
+        padding.push({ changed: false })
+      }
+
+      cells.unshift(...padding)
+    }
+
+    const rows: React.ReactNode[] = []
+    const rowCount = Math.ceil(cells.length / BytesPerRow)
+
+    for (let row = 0; row < rowCount; row++) {
+      const rowStart = row * BytesPerRow
+      const rowCells = cells.slice(rowStart, rowStart + BytesPerRow)
+      const rowChanges = Array.from(
+        new Set(
+          rowCells
+            .map(cell => cell.changeIndex)
+            .filter(
+              (changeIndex): changeIndex is number =>
+                changeIndex !== undefined
+            )
+        )
+      )
+      const changesToCapture = rowChanges.filter(
+        changeIndex => !seenChanges.has(changeIndex)
+      )
+
+      for (const changeIndex of changesToCapture) {
+        seenChanges.add(changeIndex)
+      }
+
+      const isActive = rowChanges.includes(
+        this.state.activeChangeIndex
+      )
+      const previousOffset = getRowOffset(rowCells, 'previous')
+      const currentOffset = getRowOffset(rowCells, 'current')
+      const ref =
+        changesToCapture.length > 0
+          ? (element: HTMLTableRowElement | null) => {
+              for (const changeIndex of changesToCapture) {
+                if (element === null) {
+                  this.changeRows.delete(changeIndex)
+                } else {
+                  this.changeRows.set(changeIndex, element)
+                }
+              }
+            }
+          : undefined
+
+      rows.push(
+        <tr
+          className={`hex-diff-row${isActive ? ' active' : ''}`}
+          key={`group-${groupIndex}-row-${row}`}
+          ref={ref}
+        >
+          <td className="hex-offset">
+            {previousOffset === undefined
+              ? ''
+              : formatOffset(previousOffset)}
+          </td>
+          <td className="hex-bytes">
+            {this.renderHexCells(rowCells, 'previous')}
+          </td>
+          <td className="hex-ascii">
+            {this.renderAsciiCells(rowCells, 'previous')}
+          </td>
+          <td className="hex-offset">
+            {currentOffset === undefined
+              ? ''
+              : formatOffset(currentOffset)}
+          </td>
+          <td className="hex-bytes">
+            {this.renderHexCells(rowCells, 'current')}
+          </td>
+          <td className="hex-ascii">
+            {this.renderAsciiCells(rowCells, 'current')}
+          </td>
+        </tr>
+      )
+    }
+
+    return rows
   }
 
   private renderGap(
@@ -232,95 +393,49 @@ export class BinaryFile extends React.Component<
     )
   }
 
-  private renderChunkRows(
-    chunk: IBinaryDiffChunk,
-    chunkIndex: number,
-    seenChanges: Set<number>
-  ) {
-    const rows: React.ReactNode[] = []
-    const changeIndex = chunk.changeIndex
-    const captureRef =
-      changeIndex !== undefined && !seenChanges.has(changeIndex)
-
-    if (changeIndex !== undefined) {
-      seenChanges.add(changeIndex)
-    }
-
-    if (chunk.kind === 'equal-gap' || chunk.kind === 'change-gap') {
-      rows.push(
-        this.renderGap(chunk, `gap-${chunkIndex}`, captureRef)
-      )
-      return rows
-    }
-
-    const rowCount = Math.ceil(
-      Math.max(chunk.previousData.length, chunk.currentData.length) /
-        BytesPerRow
-    )
-
-    for (let row = 0; row < rowCount; row++) {
-      const rowStart = row * BytesPerRow
-      const previousHasData = rowStart < chunk.previousData.length
-      const currentHasData = rowStart < chunk.currentData.length
-      const isActive =
-        chunk.kind === 'change' &&
-        changeIndex === this.state.activeChangeIndex
-      const ref =
-        captureRef && row === 0 && changeIndex !== undefined
-          ? (element: HTMLTableRowElement | null) => {
-              if (element === null) {
-                this.changeRows.delete(changeIndex)
-              } else {
-                this.changeRows.set(changeIndex, element)
-              }
-            }
-          : undefined
-
-      rows.push(
-        <tr
-          className={`${chunk.kind === 'change' ? 'hex-diff-change' : ''}${
-            isActive ? ' active' : ''
-          }`}
-          key={`${chunkIndex}-${row}`}
-          ref={ref}
-        >
-          <td className="hex-offset">
-            {previousHasData
-              ? formatOffset(chunk.previousOffset + rowStart)
-              : ''}
-          </td>
-          <td className="hex-bytes">
-            {this.renderHexBytes(chunk, rowStart, 'previous')}
-          </td>
-          <td className="hex-ascii">
-            {this.renderAsciiBytes(chunk, rowStart, 'previous')}
-          </td>
-          <td className="hex-offset">
-            {currentHasData
-              ? formatOffset(chunk.currentOffset + rowStart)
-              : ''}
-          </td>
-          <td className="hex-bytes">
-            {this.renderHexBytes(chunk, rowStart, 'current')}
-          </td>
-          <td className="hex-ascii">
-            {this.renderAsciiBytes(chunk, rowStart, 'current')}
-          </td>
-        </tr>
-      )
-    }
-
-    return rows
-  }
-
   private renderRows() {
     const rows: React.ReactNode[] = []
+    const group: IBinaryDiffChunk[] = []
     const seenChanges = new Set<number>()
+    let groupIndex = 0
+
+    const flushGroup = () => {
+      if (group.length === 0) {
+        return
+      }
+
+      rows.push(
+        ...this.renderCellGroup(group, groupIndex++, seenChanges)
+      )
+      group.length = 0
+    }
 
     this.props.diff.chunks.forEach((chunk, chunkIndex) => {
-      rows.push(...this.renderChunkRows(chunk, chunkIndex, seenChanges))
+      if (chunk.kind !== 'equal-gap' && chunk.kind !== 'change-gap') {
+        group.push(chunk)
+        return
+      }
+
+      flushGroup()
+
+      const changeIndex = chunk.changeIndex
+      const captureRef =
+        changeIndex !== undefined && !seenChanges.has(changeIndex)
+
+      if (captureRef && changeIndex !== undefined) {
+        seenChanges.add(changeIndex)
+      }
+
+      rows.push(
+        this.renderGap(
+          chunk,
+          `gap-${chunkIndex}`,
+          captureRef
+        )
+      )
     })
 
+    flushGroup()
     return rows
   }
 

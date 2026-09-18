@@ -229,6 +229,11 @@ function findResyncPoint(
       }
     }
 
+    const currentDelta = candidateCurrent - currentOffset
+    if (best !== null && currentDelta > bestDistance) {
+      break
+    }
+
     if (candidateCurrent < currentLastStart) {
       currentHash = slideWindowHash(
         currentHash,

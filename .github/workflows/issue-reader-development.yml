@@ -35,6 +35,16 @@ jobs:
           echo '7cc579478640ffef554d2affe580de91a420a59396d9427f8f9dd4ee44066dfd  /tmp/issue-reader.patch' | sha256sum --check
           git apply --check /tmp/issue-reader.patch
           git apply /tmp/issue-reader.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/ui/branches/issue-detail.tsx')
+          s = p.read_text().replace('componentDidUpdate(previous: IIssueReaderProps)', 'componentDidUpdate(prevProps: IIssueReaderProps)').replace('previous.repository.hash', 'prevProps.repository.hash').replace('previous.issueNumber', 'prevProps.issueNumber')
+          s = s.replace('          tabIndex={0}', '          // The read-only scroll region must be focusable for PageDown/Home/End.\n          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex\n          tabIndex={0}')
+          p.write_text(s)
+          p = Path('app/test/e2e/issue-reader-driver.ts')
+          s = p.read_text().replace('  interface Window {', '  // Augment the native browser interface; its name is fixed by lib.dom.d.ts.\n  // eslint-disable-next-line @typescript-eslint/naming-convention\n  interface Window {')
+          p.write_text(s)
+          PY
           git rm .github/issue-reader-changes.*.gzpart .github/workflows/issue-reader-development.yml
       - name: Install Electron display dependencies
         run: |

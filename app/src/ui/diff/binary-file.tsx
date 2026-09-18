@@ -1,14 +1,13 @@
 import * as React from 'react'
 import * as Path from 'path'
 
-import { IBinaryDiff } from '../../models/diff'
+import { IBinaryDiff, IBinaryDiffChunk } from '../../models/diff'
 import { Repository } from '../../models/repository'
 
+import { Button } from '../lib/button'
 import { LinkButton } from '../lib/link-button'
 
 const BytesPerRow = 16
-const ContextRows = 1
-const MaxRenderedRows = 2048
 
 interface IBinaryFileProps {
   readonly repository: Repository
@@ -21,88 +20,129 @@ interface IBinaryFileProps {
   readonly onOpenBinaryFile: (fullPath: string) => void
 }
 
-interface IRowsToRender {
-  readonly rowIndexes: ReadonlyArray<number>
-  readonly truncated: boolean
+interface IBinaryFileState {
+  readonly activeChangeIndex: number
 }
 
-function getByte(data: ReadonlyArray<number>, offset: number) {
-  return offset < data.length ? data[offset] : undefined
+function formatOffset(offset: number) {
+  return offset.toString(16).padStart(8, '0').toUpperCase()
 }
 
-function getRowsToRender(
-  previous: ReadonlyArray<number>,
-  current: ReadonlyArray<number>
-): IRowsToRender {
-  const rowCount = Math.ceil(
-    Math.max(previous.length, current.length) / BytesPerRow
-  )
-  const includedRows = new Set<number>()
+function formatByteCount(value: number | undefined) {
+  if (value === undefined) {
+    return '—'
+  }
 
-  for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-    const rowOffset = rowIndex * BytesPerRow
-    let changed = false
+  if (value < 1024) {
+    return `${value} B`
+  }
 
-    for (let column = 0; column < BytesPerRow; column++) {
-      const offset = rowOffset + column
-      if (getByte(previous, offset) !== getByte(current, offset)) {
-        changed = true
-        break
-      }
-    }
+  const units = ['KiB', 'MiB', 'GiB', 'TiB']
+  let size = value / 1024
+  let unit = units[0]
 
-    if (changed) {
-      const firstContextRow = Math.max(0, rowIndex - ContextRows)
-      const lastContextRow = Math.min(rowCount - 1, rowIndex + ContextRows)
+  for (let i = 1; i < units.length && size >= 1024; i++) {
+    size /= 1024
+    unit = units[i]
+  }
 
-      for (
-        let contextRow = firstContextRow;
-        contextRow <= lastContextRow;
-        contextRow++
-      ) {
-        includedRows.add(contextRow)
-      }
+  return `${size.toFixed(size >= 10 ? 1 : 2)} ${unit}`
+}
+
+function formatInteger(value: number) {
+  return value.toLocaleString()
+}
+
+function byteToAscii(value: number | undefined) {
+  if (value === undefined) {
+    return ' '
+  }
+
+  return value >= 0x20 && value <= 0x7e ? String.fromCharCode(value) : '·'
+}
+
+/** Renders an HxD/WinMerge-style side-by-side binary comparison. */
+export class BinaryFile extends React.Component<
+  IBinaryFileProps,
+  IBinaryFileState
+> {
+  public state: IBinaryFileState = {
+    activeChangeIndex: 0,
+  }
+
+  private readonly changeRows = new Map<number, HTMLTableRowElement>()
+
+  public componentDidUpdate(previousProps: IBinaryFileProps) {
+    if (
+      previousProps.diff !== this.props.diff &&
+      this.state.activeChangeIndex !== 0
+    ) {
+      this.setState({ activeChangeIndex: 0 })
     }
   }
 
-  const allRows = Array.from(includedRows).sort((a, b) => a - b)
-
-  return {
-    rowIndexes: allRows.slice(0, MaxRenderedRows),
-    truncated: allRows.length > MaxRenderedRows,
-  }
-}
-
-/** Renders a compact byte-by-byte hex preview for binary file changes. */
-export class BinaryFile extends React.Component<IBinaryFileProps, {}> {
   private open = () => {
     const fullPath = Path.join(this.props.repository.path, this.props.path)
     this.props.onOpenBinaryFile(fullPath)
   }
 
-  private renderBytes(
-    previous: ReadonlyArray<number>,
-    current: ReadonlyArray<number>,
-    offset: number,
+  private selectChange = (changeIndex: number) => {
+    if (
+      changeIndex < 0 ||
+      changeIndex >= this.props.diff.changeCount ||
+      changeIndex === this.state.activeChangeIndex
+    ) {
+      return
+    }
+
+    this.setState({ activeChangeIndex: changeIndex }, () => {
+      this.changeRows.get(changeIndex)?.scrollIntoView({
+        block: 'center',
+        behavior: 'smooth',
+      })
+    })
+  }
+
+  private previousChange = () => {
+    this.selectChange(this.state.activeChangeIndex - 1)
+  }
+
+  private nextChange = () => {
+    this.selectChange(this.state.activeChangeIndex + 1)
+  }
+
+  private renderHexBytes(
+    chunk: IBinaryDiffChunk,
+    rowStart: number,
     side: 'previous' | 'current'
   ) {
-    const spans = []
+    const previous = chunk.previousData
+    const current = chunk.currentData
+    const selected = side === 'previous' ? previous : current
+    const spans: React.ReactNode[] = []
 
     for (let column = 0; column < BytesPerRow; column++) {
-      const byteOffset = offset + column
-      const previousByte = getByte(previous, byteOffset)
-      const currentByte = getByte(current, byteOffset)
-      const value = side === 'previous' ? previousByte : currentByte
-      const changed = previousByte !== currentByte
+      const index = rowStart + column
+      const previousByte = previous[index]
+      const currentByte = current[index]
+      const value = selected[index]
+      const changed =
+        chunk.kind === 'change' && previousByte !== currentByte
       const changeClass =
         changed && value !== undefined
           ? side === 'previous'
             ? ' hex-byte-removed'
             : ' hex-byte-added'
           : ''
+      const missingClass =
+        changed && value === undefined ? ' hex-byte-missing' : ''
+      const groupClass = column === 7 ? ' hex-byte-group-end' : ''
 
       spans.push(
-        <span className={`hex-byte${changeClass}`} key={column}>
+        <span
+          className={`hex-byte${changeClass}${missingClass}${groupClass}`}
+          key={column}
+        >
           {value === undefined
             ? '  '
             : value.toString(16).padStart(2, '0').toUpperCase()}
@@ -113,95 +153,305 @@ export class BinaryFile extends React.Component<IBinaryFileProps, {}> {
     return spans
   }
 
-  private renderRows(
-    previous: ReadonlyArray<number>,
-    current: ReadonlyArray<number>,
-    rowIndexes: ReadonlyArray<number>
+  private renderAsciiBytes(
+    chunk: IBinaryDiffChunk,
+    rowStart: number,
+    side: 'previous' | 'current'
+  ) {
+    const previous = chunk.previousData
+    const current = chunk.currentData
+    const selected = side === 'previous' ? previous : current
+    const spans: React.ReactNode[] = []
+
+    for (let column = 0; column < BytesPerRow; column++) {
+      const index = rowStart + column
+      const previousByte = previous[index]
+      const currentByte = current[index]
+      const value = selected[index]
+      const changed =
+        chunk.kind === 'change' && previousByte !== currentByte
+      const changeClass =
+        changed && value !== undefined
+          ? side === 'previous'
+            ? ' hex-ascii-removed'
+            : ' hex-ascii-added'
+          : ''
+      const missingClass =
+        changed && value === undefined ? ' hex-ascii-missing' : ''
+
+      spans.push(
+        <span
+          className={`hex-ascii-byte${changeClass}${missingClass}`}
+          key={column}
+        >
+          {byteToAscii(value)}
+        </span>
+      )
+    }
+
+    return spans
+  }
+
+  private renderGap(
+    chunk: IBinaryDiffChunk,
+    key: string,
+    captureRef: boolean
+  ) {
+    const isChange = chunk.kind === 'change-gap'
+    const changeIndex = chunk.changeIndex
+    const isActive =
+      isChange && changeIndex === this.state.activeChangeIndex
+
+    const ref =
+      captureRef && changeIndex !== undefined
+        ? (element: HTMLTableRowElement | null) => {
+            if (element === null) {
+              this.changeRows.delete(changeIndex)
+            } else {
+              this.changeRows.set(changeIndex, element)
+            }
+          }
+        : undefined
+
+    const message = isChange
+      ? `… changed bytes hidden: ${formatInteger(
+          chunk.previousLength
+        )} before / ${formatInteger(chunk.currentLength)} after …`
+      : `… ${formatInteger(chunk.previousLength)} unchanged bytes …`
+
+    return (
+      <tr
+        className={`hex-diff-gap${isChange ? ' changed' : ''}${
+          isActive ? ' active' : ''
+        }`}
+        key={key}
+        ref={ref}
+      >
+        <td colSpan={6}>{message}</td>
+      </tr>
+    )
+  }
+
+  private renderChunkRows(
+    chunk: IBinaryDiffChunk,
+    chunkIndex: number,
+    seenChanges: Set<number>
   ) {
     const rows: React.ReactNode[] = []
-    let previousRowIndex: number | undefined = undefined
+    const changeIndex = chunk.changeIndex
+    const captureRef =
+      changeIndex !== undefined && !seenChanges.has(changeIndex)
 
-    for (const rowIndex of rowIndexes) {
-      if (previousRowIndex !== undefined && rowIndex > previousRowIndex + 1) {
-        rows.push(
-          <tr className="hex-diff-gap" key={`gap-${rowIndex}`}>
-            <td colSpan={3}>… unchanged bytes …</td>
-          </tr>
-        )
-      }
+    if (changeIndex !== undefined) {
+      seenChanges.add(changeIndex)
+    }
 
-      const offset = rowIndex * BytesPerRow
+    if (chunk.kind === 'equal-gap' || chunk.kind === 'change-gap') {
       rows.push(
-        <tr key={rowIndex}>
+        this.renderGap(chunk, `gap-${chunkIndex}`, captureRef)
+      )
+      return rows
+    }
+
+    const rowCount = Math.ceil(
+      Math.max(chunk.previousData.length, chunk.currentData.length) /
+        BytesPerRow
+    )
+
+    for (let row = 0; row < rowCount; row++) {
+      const rowStart = row * BytesPerRow
+      const previousHasData = rowStart < chunk.previousData.length
+      const currentHasData = rowStart < chunk.currentData.length
+      const isActive =
+        chunk.kind === 'change' &&
+        changeIndex === this.state.activeChangeIndex
+      const ref =
+        captureRef && row === 0 && changeIndex !== undefined
+          ? (element: HTMLTableRowElement | null) => {
+              if (element === null) {
+                this.changeRows.delete(changeIndex)
+              } else {
+                this.changeRows.set(changeIndex, element)
+              }
+            }
+          : undefined
+
+      rows.push(
+        <tr
+          className={`${chunk.kind === 'change' ? 'hex-diff-change' : ''}${
+            isActive ? ' active' : ''
+          }`}
+          key={`${chunkIndex}-${row}`}
+          ref={ref}
+        >
           <td className="hex-offset">
-            {offset.toString(16).padStart(8, '0').toUpperCase()}
+            {previousHasData
+              ? formatOffset(chunk.previousOffset + rowStart)
+              : ''}
           </td>
           <td className="hex-bytes">
-            {this.renderBytes(previous, current, offset, 'previous')}
+            {this.renderHexBytes(chunk, rowStart, 'previous')}
+          </td>
+          <td className="hex-ascii">
+            {this.renderAsciiBytes(chunk, rowStart, 'previous')}
+          </td>
+          <td className="hex-offset">
+            {currentHasData
+              ? formatOffset(chunk.currentOffset + rowStart)
+              : ''}
           </td>
           <td className="hex-bytes">
-            {this.renderBytes(previous, current, offset, 'current')}
+            {this.renderHexBytes(chunk, rowStart, 'current')}
+          </td>
+          <td className="hex-ascii">
+            {this.renderAsciiBytes(chunk, rowStart, 'current')}
           </td>
         </tr>
       )
-
-      previousRowIndex = rowIndex
     }
 
     return rows
   }
 
+  private renderRows() {
+    const rows: React.ReactNode[] = []
+    const seenChanges = new Set<number>()
+
+    this.props.diff.chunks.forEach((chunk, chunkIndex) => {
+      rows.push(...this.renderChunkRows(chunk, chunkIndex, seenChanges))
+    })
+
+    return rows
+  }
+
+  private renderIncompleteNotice() {
+    const diff = this.props.diff
+
+    if (diff.complete) {
+      return null
+    }
+
+    if (
+      diff.previousSize === undefined &&
+      diff.currentSize === undefined
+    ) {
+      return (
+        <div className="binary-diff-notice">
+          Binary conflict contents are not available for inline comparison.
+        </div>
+      )
+    }
+
+    const before =
+      diff.previousSize === undefined
+        ? null
+        : `Before: compared ${formatByteCount(
+            diff.previousComparedBytes
+          )} of ${formatByteCount(diff.previousSize)}`
+    const after =
+      diff.currentSize === undefined
+        ? null
+        : `After: compared ${formatByteCount(
+            diff.currentComparedBytes
+          )} of ${formatByteCount(diff.currentSize)}`
+
+    return (
+      <div className="binary-diff-notice">
+        Comparison is limited for oversized files.{' '}
+        {[before, after].filter(x => x !== null).join(' · ')}
+      </div>
+    )
+  }
+
+  private renderEmpty() {
+    const diff = this.props.diff
+
+    if (!diff.complete) {
+      return (
+        <div className="binary-diff-empty">
+          No differences were found in the compared byte range.
+        </div>
+      )
+    }
+
+    return (
+      <div className="binary-diff-empty">
+        No byte differences found.
+      </div>
+    )
+  }
+
   public render() {
-    const previous = this.props.diff.previous?.data ?? []
-    const current = this.props.diff.current?.data ?? []
-    const rows = getRowsToRender(previous, current)
-    const previewTruncated =
-      this.props.diff.previous?.truncated === true ||
-      this.props.diff.current?.truncated === true
+    const diff = this.props.diff
+    const hasChanges = diff.changeCount > 0
+    const currentDifference = hasChanges
+      ? this.state.activeChangeIndex + 1
+      : 0
 
     return (
       <div className="panel binary binary-diff" id="diff">
         <div className="binary-diff-header">
-          <div>
-            <div className="binary-diff-title">Hex diff</div>
+          <div className="binary-diff-heading">
+            <div className="binary-diff-title">Binary compare</div>
             <div className="binary-diff-subtitle">
-              {BytesPerRow} bytes per row, changed rows with context
+              Before {formatByteCount(diff.previousSize)} · After{' '}
+              {formatByteCount(diff.currentSize)} ·{' '}
+              {formatInteger(diff.changeCount)} changed region
+              {diff.changeCount === 1 ? '' : 's'}
             </div>
           </div>
-          <LinkButton onClick={this.open}>
-            Open file in external program
-          </LinkButton>
+
+          <div className="binary-diff-actions">
+            <Button
+              size="small"
+              onClick={this.previousChange}
+              disabled={
+                !hasChanges || this.state.activeChangeIndex === 0
+              }
+            >
+              Previous
+            </Button>
+            <span className="binary-diff-position">
+              {hasChanges
+                ? `Difference ${currentDifference} of ${formatInteger(
+                    diff.changeCount
+                  )}`
+                : 'No differences'}
+            </span>
+            <Button
+              size="small"
+              onClick={this.nextChange}
+              disabled={
+                !hasChanges ||
+                this.state.activeChangeIndex >= diff.changeCount - 1
+              }
+            >
+              Next
+            </Button>
+            <LinkButton onClick={this.open}>
+              Open file in external program
+            </LinkButton>
+          </div>
         </div>
 
-        {previewTruncated ? (
-          <div className="binary-diff-notice">
-            Preview is limited to the first 64 KiB of each file.
-          </div>
-        ) : null}
-
-        {rows.truncated ? (
-          <div className="binary-diff-notice">
-            Only the first {MaxRenderedRows} changed/context rows are shown.
-          </div>
-        ) : null}
+        {this.renderIncompleteNotice()}
 
         <div className="binary-diff-table-container">
-          {rows.rowIndexes.length === 0 ? (
-            <div className="binary-diff-empty">
-              No byte differences found in the available preview.
-            </div>
+          {diff.chunks.length === 0 ? (
+            this.renderEmpty()
           ) : (
             <table className="binary-diff-table">
               <thead>
                 <tr>
-                  <th>Offset</th>
-                  <th>Before</th>
-                  <th>After</th>
+                  <th>Before offset</th>
+                  <th>Before hex</th>
+                  <th>ASCII</th>
+                  <th>After offset</th>
+                  <th>After hex</th>
+                  <th>ASCII</th>
                 </tr>
               </thead>
-              <tbody>
-                {this.renderRows(previous, current, rows.rowIndexes)}
-              </tbody>
+              <tbody>{this.renderRows()}</tbody>
             </table>
           )}
         </div>

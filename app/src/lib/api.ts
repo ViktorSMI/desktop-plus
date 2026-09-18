@@ -4589,7 +4589,7 @@ export class GitLabAPI extends API {
     owner: string,
     name: string,
     issueNumber: string
-  ): Promise<ReadonlyArray<IAPIComment>> {
+  ): Promise<IAPIComment[]> {
     const projectPath = encodeURIComponent(`${owner}/${name}`)
     const path = `projects/${projectPath}/issues/${issueNumber}/notes`
 

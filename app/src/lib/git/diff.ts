@@ -1,6 +1,6 @@
 import * as Path from 'path'
 
-import { getBlobContents } from './show'
+import { getBlobContents, getPartialBlobContents } from './show'
 
 import { Repository } from '../../models/repository'
 import {
@@ -19,11 +19,13 @@ import {
   LineEndingsChange,
   parseLineEndingText,
   ILargeTextDiff,
+  IBinaryDiff,
+  IBinaryFileContents,
 } from '../../models/diff'
 
 import { DiffParser } from '../diff-parser'
 import { getOldPathOrDefault } from '../get-old-path'
-import { readFile, writeFile, unlink } from 'fs/promises'
+import { open, readFile, writeFile, unlink } from 'fs/promises'
 import { getTempFilePath } from '../file-system'
 import { forceUnwrap } from '../fatal-error'
 import { git } from './core'
@@ -59,6 +61,9 @@ const MaxReasonableDiffSize = MaxDiffBufferSize / 16 // ~4.375MB in decimal
  * than this, we probably shouldn't attempt it
  */
 const MaxCharactersPerLine = 5000
+
+/** Maximum number of bytes to load from each side of a binary diff preview. */
+const MaxBinaryDiffPreviewBytes = 64 * 1024
 
 /**
  * Utility function to check whether parsing this buffer is going to cause
@@ -608,6 +613,117 @@ export async function getFilesDiffText(
   return outputString
 }
 
+async function getBlobBinaryContents(
+  repository: Repository,
+  path: string,
+  commitish: string
+): Promise<IBinaryFileContents | undefined> {
+  const contents = await getPartialBlobContents(
+    repository,
+    commitish,
+    path,
+    MaxBinaryDiffPreviewBytes + 1
+  )
+
+  if (contents === null) {
+    return undefined
+  }
+
+  return {
+    data: Array.from(contents.subarray(0, MaxBinaryDiffPreviewBytes)),
+    truncated: contents.length > MaxBinaryDiffPreviewBytes,
+  }
+}
+
+async function getWorkingDirectoryBinaryContents(
+  repository: Repository,
+  file: FileChange
+): Promise<IBinaryFileContents> {
+  const handle = await open(Path.join(repository.path, file.path), 'r')
+
+  try {
+    const buffer = Buffer.alloc(MaxBinaryDiffPreviewBytes + 1)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+
+    return {
+      data: Array.from(
+        buffer.subarray(0, Math.min(bytesRead, MaxBinaryDiffPreviewBytes))
+      ),
+      truncated: bytesRead > MaxBinaryDiffPreviewBytes,
+    }
+  } finally {
+    await handle.close()
+  }
+}
+
+async function getBinaryDiff(
+  repository: Repository,
+  file: FileChange,
+  newestCommitish: string,
+  oldestCommitish: string
+): Promise<IBinaryDiff> {
+  let current: IBinaryFileContents | undefined = undefined
+  let previous: IBinaryFileContents | undefined = undefined
+
+  if (file instanceof WorkingDirectoryFileChange) {
+    if (file.status.kind === AppFileStatusKind.Conflicted) {
+      return { kind: DiffType.Binary }
+    }
+
+    if (file.status.kind !== AppFileStatusKind.Deleted) {
+      current = await getWorkingDirectoryBinaryContents(repository, file)
+    }
+
+    if (
+      file.status.kind !== AppFileStatusKind.New &&
+      file.status.kind !== AppFileStatusKind.Untracked
+    ) {
+      previous = await getBlobBinaryContents(
+        repository,
+        getOldPathOrDefault(file),
+        'HEAD'
+      )
+    }
+  } else {
+    if (file.status.kind !== AppFileStatusKind.Deleted) {
+      current = await getBlobBinaryContents(
+        repository,
+        file.path,
+        newestCommitish
+      )
+    }
+
+    if (
+      file.status.kind !== AppFileStatusKind.New &&
+      file.status.kind !== AppFileStatusKind.Untracked &&
+      file.status.kind !== AppFileStatusKind.Deleted
+    ) {
+      previous = await getBlobBinaryContents(
+        repository,
+        getOldPathOrDefault(file),
+        `${oldestCommitish}^`
+      )
+    }
+
+    if (
+      file instanceof CommittedFileChange &&
+      file.status.kind === AppFileStatusKind.Deleted
+    ) {
+      previous = await getBlobBinaryContents(
+        repository,
+        getOldPathOrDefault(file),
+        file.parentCommitish
+      )
+    }
+  }
+
+  return {
+    kind: DiffType.Binary,
+    previous,
+    current,
+  }
+}
+
 async function getImageDiff(
   repository: Repository,
   file: FileChange,
@@ -722,9 +838,7 @@ export async function convertDiff(
   if (diff.isBinary) {
     // some extension we don't know how to parse, never mind
     if (!imageFileExtensions.has(extension)) {
-      return {
-        kind: DiffType.Binary,
-      }
+      return getBinaryDiff(repository, file, newestCommitish, oldestCommitish)
     } else {
       return getImageDiff(repository, file, newestCommitish, oldestCommitish)
     }

@@ -971,3 +971,112 @@
     }
   }
 }
+
+
+.seamless-diff-switcher .panel.binary.binary-diff {
+  align-items: stretch;
+  justify-content: flex-start;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.binary-diff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing);
+  padding: var(--spacing) var(--spacing-double);
+  border-bottom: var(--base-border);
+  flex-shrink: 0;
+}
+
+.binary-diff-title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.binary-diff-subtitle {
+  color: var(--text-secondary-color);
+  font-size: var(--font-size-sm);
+  margin-top: 2px;
+}
+
+.binary-diff-notice {
+  padding: var(--spacing-half) var(--spacing-double);
+  color: var(--text-secondary-color);
+  background: var(--box-alt-background-color);
+  border-bottom: var(--base-border);
+  flex-shrink: 0;
+}
+
+.binary-diff-table-container {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.binary-diff-empty {
+  padding: var(--spacing-double);
+  text-align: center;
+  color: var(--text-secondary-color);
+}
+
+.binary-diff-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-family: var(--diff-font-family, var(--font-family-monospace));
+  font-size: var(--diff-font-size, var(--font-size-sm));
+
+  th,
+  td {
+    padding: 3px var(--spacing);
+    border-bottom: 1px solid var(--diff-border-color);
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--box-alt-background-color);
+    color: var(--text-secondary-color);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .hex-offset {
+    color: var(--text-secondary-color);
+    user-select: text;
+  }
+
+  .hex-bytes {
+    user-select: text;
+  }
+
+  .hex-byte {
+    display: inline-block;
+    width: 2ch;
+    margin-right: 1ch;
+    text-align: center;
+    border-radius: 2px;
+  }
+
+  .hex-byte-removed {
+    color: var(--diff-delete-text-color);
+    background: var(--diff-delete-inner-background-color);
+  }
+
+  .hex-byte-added {
+    color: var(--diff-add-text-color);
+    background: var(--diff-add-inner-background-color);
+  }
+
+  .hex-diff-gap td {
+    text-align: center;
+    color: var(--text-secondary-color);
+    background: var(--background-color);
+    font-style: italic;
+  }
+}

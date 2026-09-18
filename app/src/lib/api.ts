@@ -554,6 +554,15 @@ export interface IAPIIssue {
   readonly title: string
   readonly state: 'open' | 'closed'
   readonly updated_at: string
+  readonly created_at: string
+  readonly body: string | null
+  readonly user: IAPIIdentity
+  readonly html_url: string
+}
+
+export interface IAPIIssueDetails {
+  readonly issue: IAPIIssue
+  readonly comments: ReadonlyArray<IAPIComment>
 }
 
 /** The combined state of a ref. */
@@ -1187,13 +1196,40 @@ export interface IGitLabAPIIssue {
   readonly title: string
   readonly state: 'opened' | 'closed'
   readonly updated_at: string
+  readonly created_at: string
+  readonly description: string | null
+  readonly author: IGitLabAPIIdentity
+  readonly web_url: string
 }
+
+interface IGitLabAPINote {
+  readonly id: number
+  readonly body: string
+  readonly author: IGitLabAPIIdentity
+  readonly created_at: string
+  readonly system: boolean
+}
+
 function toIAPIIssueFromGitLab(issue: IGitLabAPIIssue): IAPIIssue {
   return {
     number: issue.iid,
     title: issue.title,
     state: issue.state === 'opened' ? 'open' : 'closed',
     updated_at: issue.updated_at,
+    created_at: issue.created_at,
+    body: issue.description,
+    user: toIAPIIdentityFromGitLab(issue.author),
+    html_url: issue.web_url,
+  }
+}
+
+function toIAPICommentFromGitLab(note: IGitLabAPINote): IAPIComment {
+  return {
+    id: note.id,
+    body: note.body,
+    html_url: '',
+    user: toIAPIIdentityFromGitLab(note.author),
+    created_at: note.created_at,
   }
 }
 
@@ -1373,6 +1409,10 @@ interface IForgejoAPIIssue {
   readonly title: string
   readonly state: 'open' | 'closed'
   readonly updated_at: string
+  readonly created_at: string
+  readonly body: string | null
+  readonly user: IForgejoAPIIdentity
+  readonly html_url: string
 }
 function toIAPIIssueFromForgejo(issue: IForgejoAPIIssue): IAPIIssue {
   return {
@@ -1380,6 +1420,10 @@ function toIAPIIssueFromForgejo(issue: IForgejoAPIIssue): IAPIIssue {
     title: issue.title,
     state: issue.state,
     updated_at: issue.updated_at,
+    created_at: issue.created_at,
+    body: issue.body,
+    user: toIAPIIdentityFromForgejo(issue.user),
+    html_url: issue.html_url,
   }
 }
 
@@ -2120,6 +2164,30 @@ export class API {
     } catch (e) {
       log.warn(`fetchIssues: failed for repository ${owner}/${name}`, e)
       throw e
+    }
+  }
+
+  /** Fetch a single issue in the given repository. */
+  public async fetchIssue(
+    owner: string,
+    name: string,
+    issueNumber: string
+  ): Promise<IAPIIssue | null> {
+    try {
+      const path = `repos/${owner}/${name}/issues/${issueNumber}`
+      const response = await this.ghRequest('GET', path)
+
+      if (response.status === HttpStatusCode.NotFound) {
+        return null
+      }
+
+      return await parsedResponse<IAPIIssue>(response)
+    } catch (e) {
+      log.warn(
+        `fetchIssue: failed for ${owner}/${name}#${issueNumber}`,
+        e
+      )
+      return null
     }
   }
 
@@ -4484,6 +4552,56 @@ export class GitLabAPI extends API {
     } catch (e) {
       log.warn(`fetchIssues: failed for repository ${owner}/${name}`, e)
       throw e
+    }
+  }
+
+  public override async fetchIssue(
+    owner: string,
+    name: string,
+    issueNumber: string
+  ): Promise<IAPIIssue | null> {
+    const projectPath = encodeURIComponent(`${owner}/${name}`)
+
+    try {
+      const response = await this.request(
+        this.endpoint,
+        'GET',
+        `projects/${projectPath}/issues/${issueNumber}`
+      )
+
+      if (response.status === HttpStatusCode.NotFound) {
+        return null
+      }
+
+      return toIAPIIssueFromGitLab(
+        await parsedResponse<IGitLabAPIIssue>(response)
+      )
+    } catch (e) {
+      log.warn(
+        `fetchIssue: failed for ${owner}/${name}#${issueNumber}`,
+        e
+      )
+      return null
+    }
+  }
+
+  public override async fetchIssueComments(
+    owner: string,
+    name: string,
+    issueNumber: string
+  ): Promise<ReadonlyArray<IAPIComment>> {
+    const projectPath = encodeURIComponent(`${owner}/${name}`)
+    const path = `projects/${projectPath}/issues/${issueNumber}/notes`
+
+    try {
+      const notes = await this.fetchAll<IGitLabAPINote>(path)
+      return notes.filter(note => !note.system).map(toIAPICommentFromGitLab)
+    } catch (e) {
+      log.debug(
+        `failed fetching issue comments for ${owner}/${name}/issues/${issueNumber}`,
+        e
+      )
+      return []
     }
   }
 

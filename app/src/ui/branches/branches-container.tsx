@@ -438,6 +438,8 @@ export class BranchesContainer extends React.Component<
         repository={repository}
         dispatcher={this.props.dispatcher}
         issuesStore={this.props.issuesStore}
+        emoji={this.props.emoji}
+        underlineLinks={this.props.underlineLinks}
       />
     )
   }

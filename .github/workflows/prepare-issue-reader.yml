@@ -51,6 +51,9 @@ jobs:
                 })`
           )
           fs.writeFileSync(reader, content)
+          const test = 'script/issue-reader-layout-test.mjs'
+          content = fs.readFileSync(test, 'utf8').replace('app/src/ui/dialog/is-top-most.ts', 'app/src/ui/dialog/is-top-most.tsx')
+          fs.writeFileSync(test, content)
           NODE
       - name: Apply project formatting
         run: |

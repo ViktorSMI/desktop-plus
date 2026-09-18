@@ -1,0 +1,107 @@
+name: UI screenshots
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-screenshots-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: Issue reader screenshots and checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ISSUE_READER_TEST_OUTPUT: ${{ runner.temp }}/issue-reader-layout
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: 24.19.0
+          arch: x64
+
+      - name: Lint and validate changelog
+        run: |
+          yarn lint
+          yarn validate-changelog
+          git diff --exit-code
+
+      - name: Compile production app
+        run: yarn compile:prod
+
+      - name: Run script tests
+        run: yarn test:script
+
+      - name: Install test browser
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Test responsive reader and capture screenshots
+        run: node script/check-issue-reader-layout.mjs
+
+      - name: Create screenshot gallery
+        if: always()
+        shell: python
+        run: |
+          import html
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['ISSUE_READER_TEST_OUTPUT'])
+          root.mkdir(parents=True, exist_ok=True)
+          pictures = sorted(p for p in root.glob('*.png') if p.name != 'final-state.png')
+          if not pictures:
+              raise SystemExit(0)
+          cards = ''.join(
+              '<section><h2>' + html.escape(p.stem) + '</h2>'
+              '<a href="' + p.name + '"><img src="' + p.name + '" '
+              'alt="Issue reader ' + html.escape(p.stem) + '"></a></section>'
+              for p in pictures
+          )
+          page = (
+              '<!doctype html><html lang="en"><meta charset="utf-8">'
+              '<meta name="viewport" content="width=device-width, initial-scale=1">'
+              '<title>Issue reader screenshots</title>'
+              '<style>body{font:16px system-ui;margin:24px;max-width:1400px}'
+              'img{max-width:100%;height:auto;border:1px solid #888}'
+              'section{margin:32px 0}h2{font-size:18px}</style>'
+              '<h1>Issue reader screenshots</h1>'
+              '<p>Real reader components and compiled app CSS; synthetic issue data. '
+              'This is an isolated Chromium test, not a packaged-app screenshot.</p>'
+              + cards + '</html>'
+          )
+          (root / 'index.html').write_text(page, encoding='utf-8')
+
+      - name: Upload screenshots even on test failure
+        if: always()
+        id: screenshots
+        uses: actions/upload-artifact@v7
+        with:
+          name: issue-reader-layout
+          path: ${{ env.ISSUE_READER_TEST_OUTPUT }}
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Link screenshots in run summary
+        if: always()
+        env:
+          ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+        run: |
+          echo '## Issue reader screenshots' >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$ARTIFACT_URL" ]; then
+            echo "[Download screenshots and HTML gallery]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+            echo 'Extract the artifact and open index.html. Check the test step for pass/fail results.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No screenshots were produced. Check the failed setup or build step.' >> "$GITHUB_STEP_SUMMARY"
+          fi

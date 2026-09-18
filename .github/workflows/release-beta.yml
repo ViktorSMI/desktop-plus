@@ -1,0 +1,254 @@
+name: Beta release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/beta-version'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beta-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 24.19.0
+  # No update server is configured; do not request Squirrel delta packages.
+  RELEASE_CHANNEL: ''
+
+jobs:
+  prepare:
+    name: Validate new beta version
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Validate version and refuse to overwrite a tag
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(tr -d '\r\n' < .github/beta-version)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta[0-9]+$ ]]; then
+            echo 'Expected a version such as 3.6.6-beta4' >&2
+            exit 1
+          fi
+          TAG="v$VERSION"
+          STATUS=$(curl --silent --show-error --output /tmp/tag.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG")
+          if [ "$STATUS" != '404' ]; then
+            echo "Refusing to overwrite $TAG (tag lookup returned HTTP $STATUS)." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  screenshots:
+    name: Validate UI and save screenshots
+    needs: prepare
+    uses: ./.github/workflows/ui-screenshots.yml
+
+  build:
+    name: Build ${{ matrix.friendlyName }} ${{ matrix.arch }}
+    needs: [prepare, screenshots]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022, ubuntu-latest]
+        arch: [x64, arm64]
+        include:
+          - os: macos-14
+            friendlyName: macOS
+          - os: windows-2022
+            friendlyName: Windows
+          - os: ubuntu-latest
+            friendlyName: Linux
+    timeout-minutes: 60
+    env:
+      APP_VERSION: ${{ needs.prepare.outputs.version }}
+      SEMVER_COMPATIBLE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          arch: ${{ matrix.arch }}
+
+      - name: Validate macOS version
+        if: runner.os == 'macOS'
+        run: yarn validate-macos-version
+
+      - name: Build production app
+        run: yarn build:prod
+        env:
+          DESKTOP_OAUTH_CLIENT_ID: ${{ secrets.DESKTOP_OAUTH_CLIENT_ID }}
+          DESKTOP_OAUTH_CLIENT_SECRET:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_SECRET }}
+          DESKTOP_OAUTH_CLIENT_ID_BITBUCKET:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_ID_BITBUCKET }}
+          DESKTOP_OAUTH_CLIENT_SECRET_BITBUCKET:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_SECRET_BITBUCKET }}
+          DESKTOP_OAUTH_CLIENT_ID_GITLAB:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_ID_GITLAB }}
+          DESKTOP_OAUTH_CLIENT_SECRET_GITLAB:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_SECRET_GITLAB }}
+          DESKTOP_OAUTH_CLIENT_ID_CODEBERG:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_ID_CODEBERG }}
+          DESKTOP_OAUTH_CLIENT_SECRET_CODEBERG:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_SECRET_CODEBERG }}
+          DESKTOP_OAUTH_CLIENT_ID_GITEA:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_ID_GITEA }}
+          DESKTOP_OAUTH_CLIENT_SECRET_GITEA:
+            ${{ secrets.DESKTOP_OAUTH_CLIENT_SECRET_GITEA }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APPLICATION_CERT: ${{ secrets.APPLE_APPLICATION_CERT }}
+          KEY_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERT_PASSWORD }}
+          npm_config_arch: ${{ matrix.arch }}
+          TARGET_ARCH: ${{ matrix.arch }}
+
+      - name: Prepare tests
+        run: yarn test:setup
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+
+      - name: Run unit tests on native architectures
+        if: |
+          (runner.os == 'Windows' && matrix.arch == 'x64') ||
+          (runner.os == 'macOS' && matrix.arch == 'arm64') ||
+          (runner.os == 'Linux' && matrix.arch == 'x64')
+        run: yarn test:unit
+
+      - name: Run script tests
+        run: yarn test:script
+
+      - if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-windows-signing
+        with:
+          enabled: 'false'
+
+      - name: Package production app
+        run: yarn package
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          TARGET_ARCH: ${{ matrix.arch }}
+
+      - name: Upload release installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.friendlyName }}-${{ matrix.arch }}
+          path: |
+            dist/*-macOS-*.zip
+            dist/*.exe
+            dist/*.msi
+            dist/*.AppImage
+            dist/*.AppImage.zsync
+            dist/*.deb
+            dist/*.rpm
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish beta with installers and screenshots
+    needs: [prepare, screenshots, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download installers from this run
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Download UI screenshots from this run
+        uses: actions/download-artifact@v8
+        with:
+          name: issue-reader-layout
+          path: ui-proof
+
+      - name: Package gallery and generate checksums
+        shell: python
+        run: |
+          import hashlib
+          import shutil
+          import zipfile
+          from pathlib import Path
+
+          assets = Path('release-assets')
+          proof = Path('ui-proof')
+          for expected in ('index.html', '1024x600.png', 'last-comment.png'):
+              if not (proof / expected).is_file():
+                  raise SystemExit('Missing UI proof: ' + expected)
+          for platform in ('macOS', 'Windows', 'linux'):
+              if not any(platform in p.name for p in assets.iterdir()):
+                  raise SystemExit('Missing installers for ' + platform)
+          with zipfile.ZipFile(assets / 'issue-reader-screenshots.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for file in sorted(proof.iterdir()):
+                  if file.is_file():
+                      archive.write(file, file.name)
+          for image in proof.glob('*.png'):
+              if image.name != 'final-state.png':
+                  shutil.copy2(image, assets / image.name)
+          sums = []
+          for file in sorted(assets.iterdir()):
+              if file.is_file():
+                  with file.open('rb') as stream:
+                      digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+                  sums.append(digest + '  ' + file.name)
+          (assets / 'SHA256SUMS.txt').write_text('\n'.join(sums) + '\n')
+
+      - name: Publish only after all checks and uploads succeed
+        run: |
+          set -euo pipefail
+          cp .github/beta-release-notes.md /tmp/release-notes.md
+          {
+            echo
+            echo "Source commit: $GITHUB_SHA"
+            echo
+            echo "Build and test results: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo '### Issue discussion at 1024 x 600'
+            echo "![Issue discussion]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/1024x600.png)"
+            echo
+            echo '### Last comment reached by the scroll test'
+            echo "![Last comment]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/last-comment.png)"
+          } >> /tmp/release-notes.md
+          gh release create "$TAG" release-assets/* \
+            --target "$GITHUB_SHA" \
+            --title "Desktop Plus $VERSION" \
+            --notes-file /tmp/release-notes.md \
+            --prerelease --latest=false --draft
+          gh release edit "$TAG" --draft=false
+          echo "Published [$TAG]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG)" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,149 @@
+// Explicit dimensions bound every flex ancestor of the scrolling content.
+// In particular, a fieldset's default minimum size must not size to its content.
+dialog#issue-detail-dialog {
+  box-sizing: border-box;
+  width: min(960px, calc(100vw - 32px));
+  min-width: 0;
+  max-width: calc(100vw - 32px);
+  height: min(800px, calc(100vh - 80px));
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+
+  > form {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+
+    > fieldset {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+  }
+
+  .dialog-header,
+  .issue-reader-toolbar,
+  .issue-reader-footer {
+    flex-shrink: 0;
+  }
+
+  .issue-reader-toolbar,
+  .issue-reader-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing);
+    padding: var(--spacing) var(--spacing-double);
+  }
+
+  .issue-reader-toolbar {
+    border-bottom: var(--base-border);
+  }
+
+  .issue-reader-repository {
+    flex: 1 1 200px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--text-secondary-color);
+  }
+
+  .issue-reader-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-half);
+  }
+
+  .issue-reader-content {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+    padding: var(--spacing-double);
+  }
+
+  .issue-reader-footer {
+    border-top: var(--base-border);
+    color: var(--text-secondary-color);
+  }
+
+  .issue-reader-message {
+    padding: var(--spacing-double) 0;
+  }
+
+  .issue-detail {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    user-select: text;
+  }
+
+  .issue-detail-status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-half);
+    margin-bottom: var(--spacing);
+    font-weight: var(--font-weight-semibold);
+
+    &.open {
+      color: var(--pr-open-icon-color);
+    }
+
+    &.closed {
+      color: var(--text-secondary-color);
+    }
+  }
+
+  .issue-detail-title {
+    font-size: var(--font-size-lg);
+    line-height: 1.4;
+  }
+
+  .issue-detail-meta,
+  .issue-comment-meta {
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
+  }
+
+  .issue-detail-body {
+    margin: var(--spacing-double) 0;
+  }
+
+  .issue-comments-heading {
+    border-top: var(--base-border);
+    padding-top: var(--spacing-double);
+    scroll-margin-top: var(--spacing);
+  }
+
+  .issue-no-comments {
+    color: var(--text-secondary-color);
+  }
+
+  .issue-comment {
+    padding: var(--spacing-double) 0;
+    border-bottom: var(--base-border);
+  }
+
+  .issue-more-comments {
+    padding: var(--spacing-double) 0;
+  }
+
+  @media (max-width: 600px), (max-height: 500px) {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    height: calc(100vh - 64px);
+    max-height: calc(100vh - 64px);
+
+    .issue-reader-toolbar,
+    .issue-reader-content,
+    .issue-reader-footer {
+      padding: var(--spacing);
+    }
+  }
+}

@@ -105,6 +105,7 @@ export enum PopupType {
   InstallingUpdate = 'InstallingUpdate',
   TestNotifications = 'TestNotifications',
   PullRequestComment = 'PullRequestComment',
+  IssueDetail = 'IssueDetail',
   UnknownAuthors = 'UnknownAuthors',
   TestIcons = 'TestIcons',
   ConfirmRestart = 'ConfirmRestart',
@@ -145,6 +146,11 @@ interface IBasePopup {
 }
 
 export type PopupDetail =
+  | {
+      type: PopupType.IssueDetail
+      repository: GitHubRepository
+      issueNumber: number
+    }
   | { type: PopupType.RenameBranch; repository: Repository; branch: Branch }
   | {
       type: PopupType.CantDeleteCurrentBranch

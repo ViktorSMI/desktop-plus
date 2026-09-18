@@ -2378,8 +2378,7 @@ export class API {
   ) {
     try {
       const path = `/repos/${owner}/${name}/issues/${issueNumber}/comments`
-      const response = await this.ghRequest('GET', path)
-      return await parsedResponse<IAPIComment[]>(response)
+      return Array.from(await this.fetchAll<IAPIComment>(path))
     } catch (e) {
       log.debug(
         `failed fetching issue comments for ${owner}/${name}/issues/${issueNumber}`,

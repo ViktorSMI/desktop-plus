@@ -1,5 +1,6 @@
 import * as Path from 'path'
 import * as React from 'react'
+import { IssueDetailDialog } from './branches/issue-detail-dialog'
 
 import { CSSTransition, TransitionGroup } from 'react-transition-group'
 import { shell } from '../lib/app-shell'
@@ -2681,6 +2682,18 @@ export class App extends React.Component<IAppProps, IAppState> {
             signOffCommits={repositoryState.signOffCommits}
             allowEmptyCommit={repositoryState.allowEmptyCommit}
             onUpdateCommitOptions={this.onUpdateCommitOptions}
+          />
+        )
+      case PopupType.IssueDetail:
+        return (
+          <IssueDetailDialog
+            key={`issue-${popup.repository.hash}-${popup.issueNumber}`}
+            repository={popup.repository}
+            issueNumber={popup.issueNumber}
+            dispatcher={this.props.dispatcher}
+            emoji={this.state.emoji}
+            underlineLinks={this.state.underlineLinks}
+            onDismissed={onPopupDismissedFn}
           />
         )
       case PopupType.MultiCommitOperation: {

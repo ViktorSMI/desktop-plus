@@ -4218,6 +4218,7 @@ export class App extends React.Component<IAppProps, IAppState> {
         emoji={this.state.emoji}
         enableFocusTrap={enableFocusTrap}
         underlineLinks={this.state.underlineLinks}
+        issuesStore={this.props.issuesStore}
       />
     )
   }

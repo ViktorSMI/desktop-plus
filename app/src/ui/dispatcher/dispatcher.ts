@@ -8,6 +8,7 @@ import {
   IAPIRepoRuleset,
   getDotComAPIEndpoint,
   IAPICreatePushProtectionBypassResponse,
+  IAPIIssueDetails,
 } from '../../lib/api'
 import { shell } from '../../lib/app-shell'
 import {
@@ -1366,6 +1367,14 @@ export class Dispatcher {
   /** Update the repository's issues from GitHub. */
   public refreshIssues(repository: GitHubRepository): Promise<void> {
     return this.appStore._refreshIssues(repository)
+  }
+
+  /** Fetch an issue body and its comments for read-only viewing. */
+  public fetchIssueDetails(
+    repository: GitHubRepository,
+    issueNumber: number
+  ): Promise<IAPIIssueDetails | null> {
+    return this.appStore._fetchIssueDetails(repository, issueNumber)
   }
 
   /** End the Welcome flow. */

@@ -147,9 +147,14 @@ export class IssuesStore {
     }
   }
 
-  private async getAllIssueHitsFor(repository: GitHubRepository) {
+  /** Get all cached open issues for a repository, newest issue number first. */
+  public async getAllIssuesFor(
+    repository: GitHubRepository
+  ): Promise<ReadonlyArray<IIssueHit>> {
     const hits = await this.db.getIssuesForRepository(repository.dbID)
-    return hits.map(i => ({ number: i.number, title: i.title }))
+    return hits
+      .map(i => ({ number: i.number, title: i.title }))
+      .sort((x, y) => compareDescending(x.number, y.number))
   }
 
   /** Get issues whose title or number matches the text. */
@@ -162,7 +167,7 @@ export class IssuesStore {
       this.queryCache?.repository.dbID === repository.dbID
         ? // Dexie gets confused if we return without wrapping in promise
           await Promise.resolve(this.queryCache?.issues)
-        : await this.getAllIssueHitsFor(repository)
+        : await this.getAllIssuesFor(repository)
 
     this.setQueryCache(repository, issues)
 

@@ -172,6 +172,7 @@ import {
   getEndpointForRepository,
   IAPIFullRepository,
   IAPIComment,
+  IAPIIssueDetails,
   IAPIRepoRuleset,
   deleteToken,
   IAPICreatePushProtectionBypassResponse,
@@ -2881,6 +2882,40 @@ export class AppStore extends TypedBaseStore<IAppState> {
     } catch (e) {
       log.warn(`Unable to fetch issues for ${repository.fullName}`, e)
     }
+  }
+
+  public async _fetchIssueDetails(
+    repository: GitHubRepository,
+    issueNumber: number
+  ): Promise<IAPIIssueDetails | null> {
+    const account = getAccountForEndpoint(
+      this.accounts,
+      repository.endpoint,
+      repository.loginForApi
+    )
+
+    if (!account) {
+      return null
+    }
+
+    const api = API.fromAccount(account)
+    const issue = await api.fetchIssue(
+      repository.owner.login,
+      repository.name,
+      issueNumber.toString()
+    )
+
+    if (issue === null) {
+      return null
+    }
+
+    const comments = await api.fetchIssueComments(
+      repository.owner.login,
+      repository.name,
+      issueNumber.toString()
+    )
+
+    return { issue, comments }
   }
 
   private stopBackgroundFetching() {

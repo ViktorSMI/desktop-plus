@@ -1,0 +1,85 @@
+name: Validate responsive issue reader
+
+on:
+  push:
+    branches:
+      - fix/responsive-issue-reader
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-responsive-issue-reader
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: 24.19.0
+          arch: x64
+      - name: Integrate issue reader
+        run: |
+          node .github/prepare-issue-reader.cjs
+          node <<'NODE'
+          const fs = require('fs')
+          const api = 'app/src/lib/api.ts'
+          const before = '      const path = `/repos/${owner}/${name}/issues/${issueNumber}/comments`\n      const response = await this.ghRequest(\'GET\', path)\n      return await parsedResponse<IAPIComment[]>(response)'
+          const after = '      const path = `/repos/${owner}/${name}/issues/${issueNumber}/comments`\n      return Array.from(await this.fetchAll<IAPIComment>(path))'
+          let content = fs.readFileSync(api, 'utf8')
+          if (content.split(before).length !== 2) throw new Error('Issue comment pagination target changed')
+          fs.writeFileSync(api, content.replace(before, after))
+          const reader = 'app/src/ui/branches/issue-detail-dialog.tsx'
+          content = fs.readFileSync(reader, 'utf8')
+          content = content.replace(
+            '      this.setState({ details, loading: false, failed: false })',
+            `      this.setState({
+                  details: {
+                    ...details,
+                    comments: [...details.comments].sort(
+                      (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id
+                    ),
+                  },
+                  loading: false,
+                  failed: false,
+                })`
+          )
+          fs.writeFileSync(reader, content)
+          NODE
+      - name: Apply project formatting
+        run: |
+          yarn prettier --write
+          ./node_modules/.bin/prettier --write script/issue-reader-layout-test.mjs
+      - name: Run full lint
+        run: yarn lint
+      - name: Compile production app
+        run: yarn compile:prod
+      - name: Run script tests
+        run: yarn test:script
+      - name: Install browser for layout regression tests
+        run: npx playwright install --with-deps chromium
+      - name: Test issue reader in browser
+        run: node script/issue-reader-layout-test.mjs
+      - name: Upload layout screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: issue-reader-layout
+          path: /tmp/issue-reader-layout/*.png
+          if-no-files-found: warn
+      - name: Commit validated source and remove preparation files
+        run: |
+          git rm .github/prepare-issue-reader.cjs .github/workflows/prepare-issue-reader.yml
+          git add -u
+          git diff --cached --check
+          git diff --cached --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Integrate and validate responsive issue reader'
+          git push origin HEAD:fix/responsive-issue-reader

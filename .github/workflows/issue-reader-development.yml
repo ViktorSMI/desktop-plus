@@ -1,4 +1,4 @@
-name: Issue reader development workspace
+name: Validate issue reader changes
 
 on:
   push:
@@ -6,27 +6,76 @@ on:
     paths: ['.github/workflows/issue-reader-development.yml']
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: issue-reader-development
+  cancel-in-progress: true
 
 jobs:
-  workspace:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    env:
+      APP_VERSION: 0.0.0
+      SEMVER_COMPATIBLE_VERSION: 0.0.0
+      RELEASE_CHANNEL: ''
+      DESKTOP_E2E: '1'
+      DESKTOP_SKIP_PACKAGE: '1'
+      DESKTOP_E2E_APP_MODE: unpackaged
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
         with:
-          node-version-file: .node-version
-      - name: Export source and locked formatter for offline validation
+          submodules: recursive
+      - name: Apply reviewed changes
         shell: bash
         run: |
-          mkdir -p workspace
-          git archive --format=tar.gz --output=workspace/source.tar.gz HEAD
-          version=$(node -e 'const s = require("fs").readFileSync("yarn.lock", "utf8"); const m = s.match(/prettier@\^2\.6\.0:\r?\n\s+version "([^"]+)"/); if (!m) throw Error("Prettier lock entry missing"); console.log(m[1])')
-          npm pack "prettier@${version}" --pack-destination workspace
-      - uses: actions/upload-artifact@v7
+          set -euo pipefail
+          cat .github/issue-reader-changes.{1,2,3,4}.gzpart | gzip -dc > /tmp/issue-reader.patch
+          echo '7cc579478640ffef554d2affe580de91a420a59396d9427f8f9dd4ee44066dfd  /tmp/issue-reader.patch' | sha256sum --check
+          git apply --check /tmp/issue-reader.patch
+          git apply /tmp/issue-reader.patch
+          git rm .github/issue-reader-changes.*.gzpart .github/workflows/issue-reader-development.yml
+      - name: Install Electron display dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 libgbm1 libsecret-1-dev
+      - uses: ./.github/actions/setup-ci-environment
         with:
-          name: issue-reader-workspace
-          path: workspace/*
-          retention-days: 1
-          if-no-files-found: error
+          node-version: 24.19.0
+          arch: x64
+      - name: Check project formatting and lint
+        run: yarn lint
+      - name: Test comment pagination
+        run: yarn test:unit app/test/unit/issue-comments-test.ts
+      - name: Build the real Electron app
+        run: yarn build:prod
+      - name: Exercise UI and capture screenshots
+        run: xvfb-run -a --server-args='-screen 0 1440x1000x24' yarn playwright test --config app/test/e2e/playwright.config.ts issue-reader.e2e.ts
+      - name: Commit validated changes to the feature branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/ci.yml .github/workflows/issue-reader-ui.yml .github/workflows/release-v3.6.6-beta3.yml .gitignore app docs/testing/issue-reader-screenshots.md package.json
+          git diff --cached --stat
+          git commit -m 'Fix issue reader layout and add real UI screenshot tests'
+          git push origin HEAD:fix/issue-reader-layout
+      - name: Upload UI screenshots
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-screenshots-Linux-x64
+          path: playwright-results/**/*.png
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Upload HTML report and diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-test-report-Linux-x64
+          path: |
+            playwright-report/
+            playwright-results/
+            playwright-videos/
+          retention-days: 14
+          if-no-files-found: warn

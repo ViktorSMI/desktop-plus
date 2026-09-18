@@ -102,10 +102,7 @@ export class BinaryFile extends React.Component<IBinaryFileProps, {}> {
           : ''
 
       spans.push(
-        <span
-          className={`hex-byte${changeClass}`}
-          key={column}
-        >
+        <span className={`hex-byte${changeClass}`} key={column}>
           {value === undefined
             ? '  '
             : value.toString(16).padStart(2, '0').toUpperCase()}

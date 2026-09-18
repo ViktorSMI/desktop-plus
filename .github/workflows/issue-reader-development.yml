@@ -47,6 +47,21 @@ jobs:
           p = Path('app/webpack.common.ts')
           s = p.read_text().replace("        include: path.resolve(__dirname, 'src'),", "        include: [\n          path.resolve(__dirname, 'src'),\n          // Keep fixture code out of normal production builds.\n          ...(process.env.DESKTOP_E2E === '1'\n            ? [path.resolve(__dirname, 'test/e2e/issue-reader-driver.ts')]\n            : []),\n        ],", 1)
           p.write_text(s)
+          p = Path('app/src/ui/lib/sandboxed-markdown.tsx')
+          s = p.read_text().replace('  private readonly contentResizeObserver: ResizeObserver', '  private readonly contentResizeObserver: ResizeObserver\n  private heightUpdateFrame: number | null = null')
+          s = s.replace('new ResizeObserver(this.refreshHeight)', 'new ResizeObserver(this.scheduleHeightUpdate)')
+          s = s.replace('  private onFrameRef = (frameRef: HTMLIFrameElement | null) => {', '  // A ResizeObserver callback runs during layout. Defer writes until the next\n  // frame so resizing an iframe cannot recursively invalidate that layout.\n  private scheduleHeightUpdate = () => {\n    if (this.heightUpdateFrame !== null) {\n      return\n    }\n    this.heightUpdateFrame = requestAnimationFrame(() => {\n      this.heightUpdateFrame = null\n      this.refreshHeight()\n    })\n  }\n\n  private stopObservingContent = () => {\n    this.contentResizeObserver.disconnect()\n    if (this.heightUpdateFrame !== null) {\n      cancelAnimationFrame(this.heightUpdateFrame)\n      this.heightUpdateFrame = null\n    }\n  }\n\n  private onFrameRef = (frameRef: HTMLIFrameElement | null) => {')
+          s = s.replace('    const oldDocument = this.frameRef.contentDocument\n    this.contentResizeObserver.disconnect()', '    const oldDocument = this.frameRef.contentDocument\n    this.stopObservingContent()')
+          s = s.replace('  public componentWillUnmount() {\n    this.contentResizeObserver.disconnect()', '  public componentWillUnmount() {\n    this.stopObservingContent()')
+          s = s.replace('    this.contentResizeObserver.disconnect()\n    this.contentResizeObserver.observe(doc.documentElement)', '    this.stopObservingContent()\n    this.contentResizeObserver.observe(doc.documentElement)')
+          p.write_text(s)
+          p = Path('app/styles/ui/dialogs/_issue-reader.scss')
+          s = p.read_text().replace('  > .dialog-header {\n    flex: 0 0 auto;\n  }', '  > .dialog-header {\n    flex: 0 0 auto;\n\n    h1 {\n      flex: 1;\n      min-width: 0;\n      width: auto;\n    }\n\n    .close {\n      margin-right: 0;\n    }\n  }').replace('    font-size: var(--font-size-lg);', '    font-size: 20px;')
+          p.write_text(s)
+          p = Path('app/test/e2e/issue-reader.e2e.ts')
+          s = p.read_text().replace('    const close = page\n', '    if (page.isClosed()) {\n      return\n    }\n    const close = page\n', 1)
+          s = s.replace('    .toBe(true)\n  await expect(\n    page', '    .toBe(true)\n  for (const selector of [\'.dialog-header .close\', \'.dialog-footer\']) {\n    await expect\n      .poll(() =>\n        page.locator(`#issue-reader ${selector}`).evaluate(element => {\n          const box = element.getBoundingClientRect()\n          return box.left >= 0 && box.right <= innerWidth && box.bottom <= innerHeight\n        })\n      )\n      .toBe(true)\n  }\n  await expect(\n    page', 1)
+          p.write_text(s)
           PY
           git rm .github/issue-reader-changes.*.gzpart .github/workflows/issue-reader-development.yml
       - name: Install Electron display dependencies
@@ -57,6 +72,8 @@ jobs:
         with:
           node-version: 24.19.0
           arch: x64
+      - name: Format reviewed adjustments
+        run: yarn prettier --write app/src/ui/lib/sandboxed-markdown.tsx app/styles/ui/dialogs/_issue-reader.scss app/test/e2e/issue-reader.e2e.ts
       - name: Check project formatting and lint
         run: yarn lint
       - name: Test comment pagination

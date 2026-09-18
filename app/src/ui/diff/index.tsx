@@ -15,6 +15,7 @@ import {
   DiffSelection,
   DiffType,
   IDiff,
+  IBinaryDiff,
   IImageDiff,
   ITextDiff,
   ILargeTextDiff,
@@ -140,7 +141,7 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
       case DiffType.Text:
         return this.renderText(diff)
       case DiffType.Binary:
-        return this.renderBinaryFile()
+        return this.renderBinaryFile(diff)
       case DiffType.Submodule:
         return this.renderSubmoduleDiff(diff)
       case DiffType.Image:
@@ -315,10 +316,11 @@ export class Diff extends React.Component<IDiffProps, IDiffState> {
     )
   }
 
-  private renderBinaryFile() {
+  private renderBinaryFile(diff: IBinaryDiff) {
     return (
       <BinaryFile
         path={this.props.file.path}
+        diff={diff}
         repository={this.props.repository}
         onOpenBinaryFile={this.props.onOpenBinaryFile}
       />

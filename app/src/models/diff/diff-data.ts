@@ -90,8 +90,19 @@ export interface IImageDiff {
   readonly textDiff?: ITextDiffData
 }
 
+export interface IBinaryFileContents {
+  /** Bytes included in the hex preview. */
+  readonly data: ReadonlyArray<number>
+  /** Whether the preview was truncated before the end of the file. */
+  readonly truncated: boolean
+}
+
 export interface IBinaryDiff {
   readonly kind: DiffType.Binary
+  /** Previous version of the binary file, when available. */
+  readonly previous?: IBinaryFileContents
+  /** Current version of the binary file, when available. */
+  readonly current?: IBinaryFileContents
 }
 
 export interface ISubmoduleDiff {

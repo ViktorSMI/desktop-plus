@@ -53,6 +53,17 @@ jobs:
           fs.writeFileSync(reader, content)
           const test = 'script/issue-reader-layout-test.mjs'
           content = fs.readFileSync(test, 'utf8').replace('app/src/ui/dialog/is-top-most.ts', 'app/src/ui/dialog/is-top-most.tsx')
+          content = content.replace("      'react': React,", `      'react': React,
+                'memoize-one': {__esModule:true, default: fn => {
+                  let lastArgs, value;
+                  return (...args) => {
+                    if (!lastArgs || args.length !== lastArgs.length || args.some((v,i) => v !== lastArgs[i])) {
+                      lastArgs = args;
+                      value = fn(...args);
+                    }
+                    return value;
+                  };
+                }},`)
           fs.writeFileSync(test, content)
           NODE
       - name: Apply project formatting
@@ -68,6 +79,7 @@ jobs:
       - name: Install browser for layout regression tests
         run: npx playwright install --with-deps chromium
       - name: Test issue reader in browser
+        timeout-minutes: 5
         run: node script/issue-reader-layout-test.mjs
       - name: Upload layout screenshots
         if: always()

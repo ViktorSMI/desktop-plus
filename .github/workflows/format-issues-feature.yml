@@ -1,0 +1,65 @@
+name: Format issues feature branch
+
+on:
+  push:
+    branches:
+      - feature/issues-tab
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: yarn
+      - run: yarn
+      - name: Apply Prettier and ESLint fixes
+        run: |
+          ./node_modules/.bin/prettier --write \
+            app/src/models/branches-tab.ts \
+            app/src/lib/stores/issues-store.ts \
+            app/src/lib/api.ts \
+            app/src/lib/stores/app-store.ts \
+            app/src/ui/app.tsx \
+            app/src/ui/branches/branches-container.tsx \
+            app/src/ui/branches/issue-list.tsx \
+            app/src/ui/branches/issue-detail.tsx \
+            app/src/ui/dispatcher/dispatcher.ts \
+            app/src/ui/toolbar/branch-dropdown.tsx \
+            app/styles/ui/_branches.scss
+          ./node_modules/.bin/eslint --fix --rulesdir ./eslint-rules \
+            app/src/models/branches-tab.ts \
+            app/src/lib/stores/issues-store.ts \
+            app/src/lib/api.ts \
+            app/src/lib/stores/app-store.ts \
+            app/src/ui/app.tsx \
+            app/src/ui/branches/branches-container.tsx \
+            app/src/ui/branches/issue-list.tsx \
+            app/src/ui/branches/issue-detail.tsx \
+            app/src/ui/dispatcher/dispatcher.ts \
+            app/src/ui/toolbar/branch-dropdown.tsx || true
+      - name: Commit formatter output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            app/src/models/branches-tab.ts \
+            app/src/lib/stores/issues-store.ts \
+            app/src/lib/api.ts \
+            app/src/lib/stores/app-store.ts \
+            app/src/ui/app.tsx \
+            app/src/ui/branches/branches-container.tsx \
+            app/src/ui/branches/issue-list.tsx \
+            app/src/ui/branches/issue-detail.tsx \
+            app/src/ui/dispatcher/dispatcher.ts \
+            app/src/ui/toolbar/branch-dropdown.tsx \
+            app/styles/ui/_branches.scss
+          if ! git diff --cached --quiet; then
+            git commit -m "Apply project formatting"
+            git push origin HEAD:feature/issues-tab
+          fi

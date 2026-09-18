@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      ISSUE_READER_TEST_OUTPUT: ${{ runner.temp }}/issue-reader-layout
+      ISSUE_READER_TEST_OUTPUT: /tmp/issue-reader-layout
     steps:
       - uses: actions/checkout@v7
         with:
@@ -92,6 +92,7 @@ jobs:
           path: ${{ env.ISSUE_READER_TEST_OUTPUT }}
           if-no-files-found: warn
           retention-days: 30
+          overwrite: true
 
       - name: Link screenshots in run summary
         if: always()

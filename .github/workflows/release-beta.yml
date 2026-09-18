@@ -211,8 +211,8 @@ jobs:
           for expected in ('index.html', '1024x600.png', 'last-comment.png'):
               if not (proof / expected).is_file():
                   raise SystemExit('Missing UI proof: ' + expected)
-          for platform in ('macOS', 'Windows', 'linux'):
-              if not any(platform in p.name for p in assets.iterdir()):
+          for platform in ('macos', 'windows', 'linux'):
+              if not any(platform in p.name.lower() for p in assets.iterdir()):
                   raise SystemExit('Missing installers for ' + platform)
           with zipfile.ZipFile(assets / 'issue-reader-screenshots.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
               for file in sorted(proof.iterdir()):

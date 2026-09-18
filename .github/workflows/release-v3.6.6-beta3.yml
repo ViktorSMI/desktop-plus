@@ -11,7 +11,10 @@ env:
   NODE_VERSION: 24.19.0
   APP_VERSION: 3.6.6-beta3
   SEMVER_COMPATIBLE_VERSION: 3.6.6-beta3
-  RELEASE_CHANNEL: production
+  # Keep this empty: dist-info.ts intentionally has no update URL, and
+  # production/beta packaging would otherwise try to build Squirrel deltas
+  # from an empty remote URL.
+  RELEASE_CHANNEL: ''
 
 jobs:
   build:

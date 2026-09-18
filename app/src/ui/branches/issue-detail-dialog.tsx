@@ -41,10 +41,10 @@ export class IssueDetailDialog extends React.Component<
     this.loadDetails()
   }
 
-  public componentDidUpdate(previous: IIssueDetailDialogProps) {
+  public componentDidUpdate(prevProps: IIssueDetailDialogProps) {
     if (
-      previous.repository.hash !== this.props.repository.hash ||
-      previous.issueNumber !== this.props.issueNumber
+      prevProps.repository.hash !== this.props.repository.hash ||
+      prevProps.issueNumber !== this.props.issueNumber
     ) {
       this.setState({ details: null })
       this.contentRef.current?.scrollTo(0, 0)
@@ -132,6 +132,8 @@ export class IssueDetailDialog extends React.Component<
           role="region"
           aria-label="Issue description and comments"
           aria-busy={loading}
+          // A scrollable reading region needs focus for keyboard scrolling.
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
           tabIndex={0}
           ref={this.contentRef}
         >

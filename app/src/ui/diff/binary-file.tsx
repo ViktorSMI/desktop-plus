@@ -53,10 +53,7 @@ function getRowsToRender(
 
     if (changed) {
       const firstContextRow = Math.max(0, rowIndex - ContextRows)
-      const lastContextRow = Math.min(
-        rowCount - 1,
-        rowIndex + ContextRows
-      )
+      const lastContextRow = Math.min(rowCount - 1, rowIndex + ContextRows)
 
       for (
         let contextRow = firstContextRow;
@@ -129,10 +126,7 @@ export class BinaryFile extends React.Component<IBinaryFileProps, {}> {
     let previousRowIndex: number | undefined = undefined
 
     for (const rowIndex of rowIndexes) {
-      if (
-        previousRowIndex !== undefined &&
-        rowIndex > previousRowIndex + 1
-      ) {
+      if (previousRowIndex !== undefined && rowIndex > previousRowIndex + 1) {
         rows.push(
           <tr className="hex-diff-gap" key={`gap-${rowIndex}`}>
             <td colSpan={3}>… unchanged bytes …</td>

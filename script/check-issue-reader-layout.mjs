@@ -2,7 +2,7 @@
  * Runs the real reader, Dialog and SandboxedMarkdown. Only Electron/platform
  * bridges, header/buttons and Markdown mention filters are replaced in this
  * standalone harness. No account, repository credentials or external requests.
- * Run: node script/issue-reader-layout-test.mjs
+ * Run: yarn compile:prod && node script/check-issue-reader-layout.mjs
  */
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -12,10 +12,10 @@ import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const ts = require('typescript')
-const sass = require('sass')
 const { chromium } = require('@playwright/test')
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const output = process.env.ISSUE_READER_TEST_OUTPUT || '/tmp/issue-reader-layout'
+const output =
+  process.env.ISSUE_READER_TEST_OUTPUT || '/tmp/issue-reader-layout'
 fs.mkdirSync(output, { recursive: true })
 
 const sources = {
@@ -23,26 +23,38 @@ const sources = {
   detail: 'app/src/ui/branches/issue-detail.tsx',
   dialog: 'app/src/ui/dialog/dialog.tsx',
   markdown: 'app/src/ui/lib/sandboxed-markdown.tsx',
-  topmost: 'app/src/ui/dialog/is-top-most.ts',
+  topmost: 'app/src/ui/dialog/is-top-most.tsx',
 }
 const factories = Object.entries(sources).map(([name, file]) => {
-  const js = ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.CommonJS,
-      jsx: ts.JsxEmit.React,
-      esModuleInterop: true,
-    },
-  }).outputText
-  return `${JSON.stringify(name)}: function(require, module, exports) { const __dirname = '/';\n${js}\n}`
+  const js = ts.transpileModule(
+    fs.readFileSync(path.join(root, file), 'utf8'),
+    {
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.React,
+        esModuleInterop: true,
+      },
+    }
+  ).outputText
+  return `${JSON.stringify(
+    name
+  )}: function(require, module, exports) { const __dirname = '/';\n${js}\n}`
 })
-const css = sass.renderSync({ file: path.join(root, 'app/styles/ui/_dialog.scss') }).css.toString()
+const css = fs.readFileSync(path.join(root, 'out/renderer.css'), 'utf8')
 
-const browser = await chromium.launch({ headless: true })
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--disable-web-security'],
+})
+let page
 try {
-  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
+  page = await browser.newPage({ viewport: { width: 1366, height: 768 } })
   const errors = []
-  page.on('pageerror', error => errors.push(error.message))
+  page.on('pageerror', error => {
+    errors.push(error.message)
+    console.error('Browser error:', error.message)
+  })
   await page.route('http://**/*', route => route.abort())
   await page.route('https://**/*', route => route.abort())
   await page.setContent(`<html><head><style>
@@ -66,7 +78,8 @@ try {
   ]) {
     await page.addScriptTag({ path: path.join(root, file) })
   }
-  await page.addScriptTag({ content: `
+  await page.addScriptTag({
+    content: `
     window.__DARWIN__ = false; window.__WIN32__ = false;
     window.__LINUX__ = true;
     window.Buffer = {from: s => ({toString: () => btoa(unescape(encodeURIComponent(s)))})};
@@ -77,6 +90,16 @@ try {
     const markdownCSS = 'html,body{margin:0;padding:0;color:#eee;background:#222;font:14px/1.5 sans-serif;} pre{overflow:auto;} img{max-width:100%;}';
     const mocks = {
       'react': React,
+      'memoize-one': {__esModule:true, default: fn => {
+        let lastArgs, value;
+        return (...args) => {
+          if (!lastArgs || args.length !== lastArgs.length || args.some((v,i) => v !== lastArgs[i])) {
+            lastArgs = args;
+            value = fn(...args);
+          }
+          return value;
+        };
+      }},
       'classnames': (...values) => values.flatMap(v => typeof v === 'object' && v ? Object.keys(v).filter(k => v[k]) : v || []).join(' '),
       './header': { DialogHeader: p => React.createElement('div', {className:'dialog-header'},
         React.createElement('h1', {id:p.titleId}, p.title),
@@ -120,7 +143,7 @@ try {
       comments: Array.from({length:45}, (_,i) => ({id:i+1, user:{login:'commenter-'+i}, created_at:'2026-01-01T12:00:00Z', body:'Comment '+(i+1)+'\\n\\n'+longText.slice(0,500)+(i === 44 ? '\\n\\nLAST-COMMENT-MARKER' : '')})),
     };
     window.fetchFixture = async () => window.fixture;
-    window.closed = false;
+    window.readerClosed = false;
     window.renderReader = (number = 42, hash = 'repo-a') => {
       const {DialogStackContext} = load('dialog');
       const {IssueDetailDialog} = load('reader');
@@ -128,94 +151,181 @@ try {
         React.createElement(IssueDetailDialog, {repository:{hash, fullName:'owner/repository',htmlURL:'https://example.invalid/repo'}, issueNumber:number,
           dispatcher:{fetchIssueDetails:(...args) => window.fetchFixture(...args), openInBrowser:noop, showFoldout:noop},
           emoji:new Map(), underlineLinks:true,
-          onDismissed:() => { window.closed = true; ReactDOM.unmountComponentAtNode(document.getElementById('app')); }
+          onDismissed:() => { window.readerClosed = true; ReactDOM.unmountComponentAtNode(document.getElementById('app')); }
         })), document.getElementById('app'));
     };
     document.getElementById('opener').focus();
     renderReader();
-  ` })
+  `,
+  })
   const dialog = page.locator('#issue-detail-dialog')
   const content = page.locator('.issue-reader-content')
   await dialog.waitFor({ state: 'visible' })
   await page.locator('.issue-detail-title').waitFor()
-  await page.waitForFunction(() => [...document.querySelectorAll('iframe')].every(f => f.contentDocument?.querySelector('#content')))
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('iframe')].every(f =>
+      f.contentDocument?.querySelector('#content')
+    )
+  )
 
   async function assertFits(label) {
     await page.waitForTimeout(250)
     const geometry = await page.evaluate(() => {
-      const d = document.querySelector('#issue-detail-dialog').getBoundingClientRect()
+      const d = document
+        .querySelector('#issue-detail-dialog')
+        .getBoundingClientRect()
       const c = document.querySelector('.issue-reader-content')
-      const footer = document.querySelector('.issue-reader-footer').getBoundingClientRect()
-      const header = document.querySelector('.dialog-header').getBoundingClientRect()
-      return {x:d.x,y:d.y,right:d.right,bottom:d.bottom,width:innerWidth,height:innerHeight,
-        footerBottom:footer.bottom,headerTop:header.top,client:c.clientHeight,scroll:c.scrollHeight,
-        innerWidth:c.clientWidth,innerScroll:c.scrollWidth}
+      const footer = document
+        .querySelector('.issue-reader-footer')
+        .getBoundingClientRect()
+      const header = document
+        .querySelector('.dialog-header')
+        .getBoundingClientRect()
+      return {
+        x: d.x,
+        y: d.y,
+        right: d.right,
+        bottom: d.bottom,
+        width: innerWidth,
+        height: innerHeight,
+        footerBottom: footer.bottom,
+        headerTop: header.top,
+        client: c.clientHeight,
+        scroll: c.scrollHeight,
+        innerWidth: c.clientWidth,
+        innerScroll: c.scrollWidth,
+      }
     })
     assert(geometry.x >= -1 && geometry.y >= -1, label + ': top/left clipped')
-    assert(geometry.right <= geometry.width + 1 && geometry.bottom <= geometry.height + 1, label + ': dialog outside viewport')
-    assert(geometry.footerBottom <= geometry.height && geometry.headerTop >= 0, label + ': controls clipped')
-    assert(geometry.client > 0 && geometry.scroll > geometry.client, label + ': missing scroll area')
-    assert(geometry.innerScroll <= geometry.innerWidth + 1, label + ': horizontal overflow')
+    assert(
+      geometry.right <= geometry.width + 1 &&
+        geometry.bottom <= geometry.height + 1,
+      label + ': dialog outside viewport'
+    )
+    assert(
+      geometry.footerBottom <= geometry.height && geometry.headerTop >= 0,
+      label + ': controls clipped'
+    )
+    assert(
+      geometry.client > 0 && geometry.scroll > geometry.client,
+      label + ': missing scroll area'
+    )
+    assert(
+      geometry.innerScroll <= geometry.innerWidth + 1,
+      label + ': horizontal overflow'
+    )
     console.log(label, JSON.stringify(geometry))
   }
-  for (const [width, height] of [[1366,768],[1024,600],[800,500],[480,360]]) {
-    await page.setViewportSize({width,height})
-    await assertFits(width+'x'+height)
+  for (const [width, height] of [
+    [1366, 768],
+    [1024, 600],
+    [800, 500],
+    [480, 360],
+  ]) {
+    await page.setViewportSize({ width, height })
+    await assertFits(width + 'x' + height)
     await content.evaluate(e => e.scrollTo(0, e.scrollHeight))
-    await page.screenshot({path:path.join(output, width+'x'+height+'.png')})
+    await page.screenshot({
+      path: path.join(output, width + 'x' + height + '.png'),
+    })
   }
-  await page.setViewportSize({width:1024,height:600})
-  while (await page.getByRole('button', {name:/Show more comments/}).count()) {
-    await page.getByRole('button', {name:/Show more comments/}).click()
+  await page.setViewportSize({ width: 1024, height: 600 })
+  while (
+    await page.getByRole('button', { name: /Show more comments/ }).count()
+  ) {
+    await page.getByRole('button', { name: /Show more comments/ }).click()
   }
-  await page.waitForFunction(() => document.querySelectorAll('.issue-comment iframe').length === 45 && [...document.querySelectorAll('.issue-comment iframe')].every(f => f.contentDocument?.querySelector('#content')))
-  await content.evaluate(e => e.scrollTo(0,e.scrollHeight))
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll('.issue-comment iframe').length === 45 &&
+      [...document.querySelectorAll('.issue-comment iframe')].every(f =>
+        f.contentDocument?.querySelector('#content')
+      )
+  )
+  await content.evaluate(e => e.scrollTo(0, e.scrollHeight))
   await page.waitForTimeout(300)
   const last = page.locator('.issue-comment').last()
   const lastBox = await last.boundingBox()
   const contentBox = await content.boundingBox()
-  assert(lastBox.y + lastBox.height <= contentBox.y + contentBox.height + 2, 'Last comment cannot be reached')
-  assert.equal(await last.locator('iframe').contentFrame().locator('body').getByText('LAST-COMMENT-MARKER').count(), 1)
-  await page.screenshot({path:path.join(output,'last-comment.png')})
+  assert(
+    lastBox.y + lastBox.height <= contentBox.y + contentBox.height + 2,
+    'Last comment cannot be reached'
+  )
+  assert.equal(
+    await last
+      .locator('iframe')
+      .contentFrame()
+      .locator('body')
+      .getByText('LAST-COMMENT-MARKER')
+      .count(),
+    1
+  )
+  await page.screenshot({ path: path.join(output, 'last-comment.png') })
 
   // Narrowing and widening the viewport must resize Markdown, not clip it.
-  for (const width of [480,1200,700]) {
-    await page.setViewportSize({width,height:700})
-    await assertFits('resize-'+width)
-    const clipped = await page.evaluate(() => [...document.querySelectorAll('iframe')].some(f => {
-      const body = f.contentDocument?.querySelector('#content')
-      return body && body.getBoundingClientRect().bottom > f.clientHeight + 2
-    }))
-    assert(!clipped, 'Markdown clipped after resize to '+width)
+  for (const width of [480, 1200, 700]) {
+    await page.setViewportSize({ width, height: 700 })
+    await assertFits('resize-' + width)
+    const clipped = await page.evaluate(() =>
+      [...document.querySelectorAll('iframe')].some(f => {
+        const body = f.contentDocument?.querySelector('#content')
+        return body && body.getBoundingClientRect().bottom > f.clientHeight + 2
+      })
+    )
+    assert(!clipped, 'Markdown clipped after resize to ' + width)
   }
   // A wheel event over an iframe must reach the outer scroll container.
-  await content.evaluate(e => e.scrollTo(0,0))
-  await page.locator('iframe').first().hover({position:{x:30,y:30}})
+  await content.evaluate(e => e.scrollTo(0, 0))
+  await page
+    .locator('iframe')
+    .first()
+    .hover({ position: { x: 30, y: 30 } })
   const scrollBeforeWheel = await content.evaluate(e => e.scrollTop)
-  await page.mouse.wheel(0,500)
+  await page.mouse.wheel(0, 500)
   await page.waitForTimeout(300)
-  assert(await content.evaluate(e => e.scrollTop) > scrollBeforeWheel, 'Wheel over Markdown did not scroll reader')
-  await page.getByRole('button',{name:'Comments',exact:true}).click()
-  assert(await content.evaluate(e => e.scrollTop) > 0, 'Jump to comments did not scroll')
+  assert(
+    (await content.evaluate(e => e.scrollTop)) > scrollBeforeWheel,
+    'Wheel over Markdown did not scroll reader'
+  )
+  await page.getByRole('button', { name: 'Comments', exact: true }).click()
+  assert(
+    (await content.evaluate(e => e.scrollTop)) > 0,
+    'Jump to comments did not scroll'
+  )
 
   // Late data from the previous repository must never replace the new issue.
   await page.evaluate(() => {
-    window.fetchFixture = () => new Promise(resolve => {window.resolveOld = resolve})
-    window.renderReader(1,'old-repository')
+    window.fetchFixture = () =>
+      new Promise(resolve => {
+        window.resolveOld = resolve
+      })
+    window.renderReader(1, 'old-repository')
   })
   await page.evaluate(() => {
-    window.fetchFixture = async () => ({...window.fixture,issue:{...window.fixture.issue,title:'NEW REPOSITORY ISSUE'}})
-    window.renderReader(1,'new-repository')
+    window.fetchFixture = async () => ({
+      ...window.fixture,
+      issue: { ...window.fixture.issue, title: 'NEW REPOSITORY ISSUE' },
+    })
+    window.renderReader(1, 'new-repository')
   })
-  await page.getByText('NEW REPOSITORY ISSUE',{exact:true}).waitFor()
+  await page.getByText('NEW REPOSITORY ISSUE', { exact: true }).waitFor()
   await page.evaluate(() => window.resolveOld(window.fixture))
-  assert.equal(await page.locator('.issue-detail-title').innerText(), 'NEW REPOSITORY ISSUE')
+  assert.equal(
+    await page.locator('.issue-detail-title').innerText(),
+    'NEW REPOSITORY ISSUE'
+  )
   await content.focus()
   await page.waitForTimeout(300)
   await page.keyboard.press('Escape')
-  await page.waitForFunction(() => window.closed)
+  await page.waitForFunction(() => window.readerClosed)
   assert.equal(errors.length, 0, errors.join('\n'))
-  console.log('PASS: responsive dimensions, last comment, iframe resize/wheel, navigation, stale requests, Escape')
+  console.log(
+    'PASS: responsive dimensions, last comment, iframe resize/wheel, navigation, stale requests, Escape'
+  )
 } finally {
+  if (page) {
+    fs.writeFileSync(path.join(output, 'fixture.html'), await page.content())
+    await page.screenshot({ path: path.join(output, 'final-state.png') })
+  }
   await browser.close()
 }

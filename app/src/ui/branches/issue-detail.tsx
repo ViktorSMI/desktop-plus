@@ -44,7 +44,10 @@ function formatTimestamp(value: string): string {
 }
 
 /** Issue content; the surrounding dialog owns the single vertical scrollbar. */
-export class IssueDetail extends React.Component<IIssueDetailProps, IIssueDetailState> {
+export class IssueDetail extends React.Component<
+  IIssueDetailProps,
+  IIssueDetailState
+> {
   public constructor(props: IIssueDetailProps) {
     super(props)
     this.state = { visibleComments: CommentsPerBatch }
@@ -86,7 +89,9 @@ export class IssueDetail extends React.Component<IIssueDetailProps, IIssueDetail
     return (
       <div className="issue-detail">
         <div className={`issue-detail-status ${closed ? 'closed' : 'open'}`}>
-          <Octicon symbol={closed ? octicons.issueClosed : octicons.issueOpened} />
+          <Octicon
+            symbol={closed ? octicons.issueClosed : octicons.issueOpened}
+          />
           <span>{closed ? 'Closed' : 'Open'}</span>
         </div>
         <h2 className="issue-detail-title">{issue.title}</h2>
@@ -100,7 +105,9 @@ export class IssueDetail extends React.Component<IIssueDetailProps, IIssueDetail
         <h2 className="issue-comments-heading" tabIndex={-1}>
           Comments ({comments.length})
         </h2>
-        {comments.length === 0 && <p className="issue-no-comments">No comments yet.</p>}
+        {comments.length === 0 && (
+          <p className="issue-no-comments">No comments yet.</p>
+        )}
         {visibleComments.map(comment => (
           <article className="issue-comment" key={comment.id}>
             <h3 className="issue-comment-meta">
@@ -109,7 +116,10 @@ export class IssueDetail extends React.Component<IIssueDetailProps, IIssueDetail
                 {formatTimestamp(comment.created_at)}
               </time>
             </h3>
-            {this.renderMarkdown(comment.body, `Comment by ${comment.user.login}`)}
+            {this.renderMarkdown(
+              comment.body,
+              `Comment by ${comment.user.login}`
+            )}
           </article>
         ))}
         {remaining > 0 && (

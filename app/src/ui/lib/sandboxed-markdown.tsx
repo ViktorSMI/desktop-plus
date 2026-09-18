@@ -83,6 +83,8 @@ export class SandboxedMarkdown extends React.PureComponent<
     })
   }, 100)
 
+  private contentResizeObserver: ResizeObserver | null = null
+
   private lastContainerHeight = -Infinity
 
   public constructor(props: ISandboxedMarkdownProps) {
@@ -169,6 +171,7 @@ export class SandboxedMarkdown extends React.PureComponent<
     // `srcdoc` property because the `srcdoc` property renders the html in the
     // parent dom and we want all rendering to be isolated to our sandboxed iframe.
     // -- https://csplite.com/csp/test188/
+    this.contentResizeObserver?.disconnect()
     const oldDocument = this.frameRef.contentDocument
     this.currentDocument = null
     this.frameRef.src = `data:text/html;charset=utf-8;base64,${b64src}`
@@ -210,6 +213,8 @@ export class SandboxedMarkdown extends React.PureComponent<
 
   public componentWillUnmount() {
     document.removeEventListener('scroll', this.onDocumentScroll)
+    this.onDocumentScroll.cancel()
+    this.contentResizeObserver?.disconnect()
   }
 
   /**
@@ -322,6 +327,12 @@ export class SandboxedMarkdown extends React.PureComponent<
       return
     }
 
+    this.contentResizeObserver?.disconnect()
+    this.contentResizeObserver = new ResizeObserver(this.refreshHeight)
+    const content = doc.getElementById('content')
+    if (content !== null) {
+      this.contentResizeObserver.observe(content)
+    }
     this.refreshHeight()
 
     Array.from(doc.querySelectorAll('img')).forEach(img =>

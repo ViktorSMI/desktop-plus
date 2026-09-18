@@ -76,7 +76,17 @@ export class IssueDetailDialog extends React.Component<
         return
       }
 
-      this.setState({ details, loading: false, failed: false })
+      this.setState({
+        details: {
+          ...details,
+          comments: [...details.comments].sort(
+            (a, b) =>
+              Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id
+          ),
+        },
+        loading: false,
+        failed: false,
+      })
     } catch {
       if (requestId === this.requestId) {
         this.setState({ loading: false, failed: true })

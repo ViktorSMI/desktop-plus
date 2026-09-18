@@ -19,9 +19,8 @@ import { Button } from '../lib/button'
 import { Octicon, syncClockwise } from '../octicons'
 import * as octicons from '../octicons/octicons.generated'
 import { AriaLiveContainer } from '../accessibility/aria-live-container'
-import { IAPIIssueDetails } from '../../lib/api'
-import { Emoji } from '../../lib/emoji'
-import { IssueDetail } from './issue-detail'
+import { FoldoutType } from '../../lib/app-state'
+import { PopupType } from '../../models/popup'
 
 const RowHeight = 47
 
@@ -35,8 +34,6 @@ interface IIssueListProps {
   readonly repository: RepositoryWithGitHubRepository
   readonly dispatcher: Dispatcher
   readonly issuesStore: IssuesStore
-  readonly emoji: Map<string, Emoji>
-  readonly underlineLinks: boolean
 }
 
 interface IIssueListState {
@@ -45,10 +42,6 @@ interface IIssueListState {
   readonly selectedItem: IIssueListItem | null
   readonly isLoading: boolean
   readonly screenReaderStateMessage: string | null
-  readonly openedIssue: IIssueHit | null
-  readonly issueDetails: IAPIIssueDetails | null
-  readonly isLoadingDetails: boolean
-  readonly issueDetailsError: boolean
 }
 
 function createListItems(
@@ -80,10 +73,6 @@ export class IssueList extends React.Component<
       selectedItem: null,
       isLoading: true,
       screenReaderStateMessage: null,
-      openedIssue: null,
-      issueDetails: null,
-      isLoadingDetails: false,
-      issueDetailsError: false,
     }
   }
 
@@ -98,10 +87,6 @@ export class IssueList extends React.Component<
         selectedItem: null,
         filterText: '',
         isLoading: true,
-        openedIssue: null,
-        issueDetails: null,
-        isLoadingDetails: false,
-        issueDetailsError: false,
       })
       this.refreshIssues()
     }
@@ -146,10 +131,6 @@ export class IssueList extends React.Component<
   }
 
   public render() {
-    if (this.state.openedIssue !== null) {
-      return this.renderOpenedIssue()
-    }
-
     const group = createListItems(this.state.issues)
 
     return (
@@ -172,46 +153,6 @@ export class IssueList extends React.Component<
         />
         <AriaLiveContainer message={this.state.screenReaderStateMessage} />
       </>
-    )
-  }
-
-  private renderOpenedIssue = () => {
-    const openedIssue = this.state.openedIssue
-    const repository = getNonForkGitHubRepository(this.props.repository)
-
-    if (openedIssue === null) {
-      return null
-    }
-
-    if (this.state.isLoadingDetails) {
-      return (
-        <div className="issue-detail-state">
-          <Octicon symbol={syncClockwise} className="spin" />
-          <div>Loading #{openedIssue.number}…</div>
-          <Button onClick={this.closeIssue}>Back to issues</Button>
-        </div>
-      )
-    }
-
-    if (this.state.issueDetailsError || this.state.issueDetails === null) {
-      return (
-        <div className="issue-detail-state">
-          <div>Unable to load issue #{openedIssue.number}.</div>
-          <Button onClick={this.retryOpenedIssue}>Retry</Button>
-          <Button onClick={this.closeIssue}>Back to issues</Button>
-        </div>
-      )
-    }
-
-    return (
-      <IssueDetail
-        repository={repository}
-        details={this.state.issueDetails}
-        dispatcher={this.props.dispatcher}
-        emoji={this.props.emoji}
-        underlineLinks={this.props.underlineLinks}
-        onBack={this.closeIssue}
-      />
     )
   }
 
@@ -309,47 +250,12 @@ export class IssueList extends React.Component<
   }
 
   private onItemClick = (item: IIssueListItem) => {
-    this.openIssue(item.issue)
-  }
-
-  private openIssue = async (issue: IIssueHit) => {
     const repository = getNonForkGitHubRepository(this.props.repository)
-
-    this.setState({
-      openedIssue: issue,
-      issueDetails: null,
-      isLoadingDetails: true,
-      issueDetailsError: false,
-    })
-
-    const details = await this.props.dispatcher.fetchIssueDetails(
+    this.props.dispatcher.closeFoldout(FoldoutType.Branch)
+    this.props.dispatcher.showPopup({
+      type: PopupType.IssueDetail,
       repository,
-      issue.number
-    )
-
-    if (this.unmounted || this.state.openedIssue?.number !== issue.number) {
-      return
-    }
-
-    this.setState({
-      issueDetails: details,
-      isLoadingDetails: false,
-      issueDetailsError: details === null,
-    })
-  }
-
-  private retryOpenedIssue = () => {
-    if (this.state.openedIssue !== null) {
-      this.openIssue(this.state.openedIssue)
-    }
-  }
-
-  private closeIssue = () => {
-    this.setState({
-      openedIssue: null,
-      issueDetails: null,
-      isLoadingDetails: false,
-      issueDetailsError: false,
+      issueNumber: item.issue.number,
     })
   }
 }

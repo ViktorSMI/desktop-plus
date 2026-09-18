@@ -421,11 +421,7 @@ function buildRawChunks(
   return chunks
 }
 
-function copyBytes(
-  data: ArrayLike<number>,
-  offset: number,
-  length: number
-) {
+function copyBytes(data: ArrayLike<number>, offset: number, length: number) {
   const result = new Array<number>(length)
 
   for (let i = 0; i < length; i++) {

@@ -33,6 +33,7 @@ import { Emoji } from '../../lib/emoji'
 import { BranchSortOrder } from '../../models/branch-sort-order'
 import { enableResizingToolbarButtons } from '../../lib/feature-flag'
 import { WorktreeEntry } from '../../models/worktree'
+import { IssuesStore } from '../../lib/stores/issues-store'
 
 interface IBranchDropdownProps {
   readonly dispatcher: Dispatcher
@@ -89,6 +90,8 @@ interface IBranchDropdownProps {
   readonly enableFocusTrap: boolean
 
   readonly underlineLinks: boolean
+
+  readonly issuesStore: IssuesStore
 }
 
 /**
@@ -125,6 +128,7 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
         onCheckoutInNewWorktree={this.onCheckoutInNewWorktree}
         onCheckoutPRInNewWorktree={this.onCheckoutPRInNewWorktree}
         underlineLinks={this.props.underlineLinks}
+        issuesStore={this.props.issuesStore}
       />
     )
   }

@@ -2115,8 +2115,8 @@ export class API {
     try {
       const issues = await this.fetchAll<IAPIIssue>(url)
 
-      // PRs are issues! But we only want Really Seriously Issues.
-      return issues.filter((i: any) => !i.pullRequest)
+      // GitHub's issues endpoint also returns pull requests.
+      return issues.filter((i: any) => !i.pull_request && !i.pullRequest)
     } catch (e) {
       log.warn(`fetchIssues: failed for repository ${owner}/${name}`, e)
       throw e

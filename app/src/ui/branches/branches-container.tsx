@@ -22,6 +22,8 @@ import { Button } from '../lib/button'
 
 import { BranchList } from './branch-list'
 import { PullRequestList } from './pull-request-list'
+import { IssueList } from './issue-list'
+import { IssuesStore } from '../../lib/stores/issues-store'
 import { IBranchListItem } from './group-branches'
 import { BranchSortOrder } from '../../models/branch-sort-order'
 import {
@@ -72,6 +74,9 @@ interface IBranchesContainerProps {
   readonly emoji: Map<string, Emoji>
 
   readonly underlineLinks: boolean
+
+  /** Store used to refresh and read cached issues. */
+  readonly issuesStore: IssuesStore
 }
 
 interface IBranchesContainerState {
@@ -225,6 +230,7 @@ export class BranchesContainer extends React.Component<
           {__DARWIN__ ? 'Pull Requests' : 'Pull requests'}
           {this.renderOpenPullRequestsBubble()}
         </span>
+        <span id="issues-tab">Issues</span>
       </TabBar>
     )
   }
@@ -246,10 +252,22 @@ export class BranchesContainer extends React.Component<
   private renderSelectedTab() {
     const { selectedTab, repository } = this.props
 
-    const ariaLabelledBy =
-      selectedTab === BranchesTab.Branches || !repository.gitHubRepository
-        ? 'branches-tab'
-        : 'pull-requests-tab'
+    let ariaLabelledBy = 'branches-tab'
+    if (repository.gitHubRepository) {
+      switch (selectedTab) {
+        case BranchesTab.Branches:
+          ariaLabelledBy = 'branches-tab'
+          break
+        case BranchesTab.PullRequests:
+          ariaLabelledBy = 'pull-requests-tab'
+          break
+        case BranchesTab.Issues:
+          ariaLabelledBy = 'issues-tab'
+          break
+        default:
+          assertNever(selectedTab, `Unknown Branches tab: ${selectedTab}`)
+      }
+    }
 
     return (
       <div
@@ -307,6 +325,9 @@ export class BranchesContainer extends React.Component<
         )
       case BranchesTab.PullRequests: {
         return this.renderPullRequests()
+      }
+      case BranchesTab.Issues: {
+        return this.renderIssues()
       }
       default:
         return assertNever(tab, `Unknown Branches tab: ${tab}`)
@@ -401,6 +422,22 @@ export class BranchesContainer extends React.Component<
             ? this.props.onCheckoutPRInNewWorktree
             : undefined
         }
+      />
+    )
+  }
+
+  private renderIssues() {
+    const repository = this.props.repository
+    if (!isRepositoryWithGitHubRepository(repository)) {
+      return null
+    }
+
+    return (
+      <IssueList
+        key="issue-list"
+        repository={repository}
+        dispatcher={this.props.dispatcher}
+        issuesStore={this.props.issuesStore}
       />
     )
   }

@@ -21,7 +21,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           KEEP_RELEASE_RUN: '35402170052'
-          KEEP_CI_RUN: '35402181834'
           CURRENT_RUN: ${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -35,7 +34,6 @@ jobs:
               | jq -r '.workflow_runs[].id' \
               | while read -r run_id; do
                   if [[ "${run_id}" == "${KEEP_RELEASE_RUN}" || \
-                        "${run_id}" == "${KEEP_CI_RUN}" || \
                         "${run_id}" == "${CURRENT_RUN}" ]]; then
                     echo "Keeping run ${run_id}"
                     continue
@@ -61,8 +59,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
           git rm .github/workflows/cancel-old-runs.yml
           git commit -m "Remove temporary workflow canceller"
           git push origin HEAD:main
-
-# trigger

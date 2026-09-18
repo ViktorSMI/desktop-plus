@@ -90,19 +90,41 @@ export interface IImageDiff {
   readonly textDiff?: ITextDiffData
 }
 
-export interface IBinaryFileContents {
-  /** Bytes included in the hex preview. */
-  readonly data: ReadonlyArray<number>
-  /** Whether the preview was truncated before the end of the file. */
-  readonly truncated: boolean
+export type BinaryDiffChunkKind =
+  | 'equal'
+  | 'change'
+  | 'equal-gap'
+  | 'change-gap'
+
+/**
+ * A compact piece of a binary comparison. Equal regions are collapsed down to
+ * a small amount of context, while large changed regions retain edge previews.
+ */
+export interface IBinaryDiffChunk {
+  readonly kind: BinaryDiffChunkKind
+  readonly previousOffset: number
+  readonly currentOffset: number
+  readonly previousLength: number
+  readonly currentLength: number
+  readonly previousData: ReadonlyArray<number>
+  readonly currentData: ReadonlyArray<number>
+  /** Index of the changed region this chunk belongs to, when applicable. */
+  readonly changeIndex?: number
 }
 
 export interface IBinaryDiff {
   readonly kind: DiffType.Binary
-  /** Previous version of the binary file, when available. */
-  readonly previous?: IBinaryFileContents
-  /** Current version of the binary file, when available. */
-  readonly current?: IBinaryFileContents
+  readonly previousSize?: number
+  readonly currentSize?: number
+  readonly previousComparedBytes?: number
+  readonly currentComparedBytes?: number
+  readonly chunks: ReadonlyArray<IBinaryDiffChunk>
+  readonly changeCount: number
+  /**
+   * Whether both sides were compared in full. Oversized files may be limited to
+   * a bounded prefix so the renderer process doesn't receive huge byte arrays.
+   */
+  readonly complete: boolean
 }
 
 export interface ISubmoduleDiff {

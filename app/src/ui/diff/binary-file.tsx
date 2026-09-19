@@ -319,44 +319,25 @@ export class BinaryFile extends React.Component<
     const isActive = index === this.state.activeHunk
 
     return (
-      <section
-        className={`binary-diff-hunk${isActive ? ' active' : ''}`}
-        id={`binary-diff-hunk-${index}`}
-        key={index}
-      >
-        <div className="binary-diff-hunk-header">
-          <span className="binary-diff-hunk-title">Change {index + 1}</span>
-          <span className="binary-diff-hunk-summary">
-            0x{formatOffset(firstChange.previousStart)} → 0x
-            {formatOffset(firstChange.currentStart)}
-            {' · '}
-            {this.getHunkSummary(hunk.changes)}
-          </span>
-        </div>
-        <table className="binary-diff-table">
-          <thead>
-            <tr>
-              <th colSpan={3} className="binary-diff-side-title">
-                Before
-              </th>
-              <th colSpan={3} className="binary-diff-side-title">
-                After
-              </th>
-            </tr>
-            <tr>
-              <th>Offset</th>
-              <th>Hex</th>
-              <th>ASCII</th>
-              <th>Offset</th>
-              <th>Hex</th>
-              <th>ASCII</th>
-            </tr>
-          </thead>
-          <tbody>
-            {this.renderHunkRows(hunk.previous, hunk.current, hunk.changes)}
-          </tbody>
-        </table>
-      </section>
+      <React.Fragment key={index}>
+        <tr
+          className={`binary-diff-change-row${isActive ? ' active' : ''}`}
+          id={`binary-diff-hunk-${index}`}
+        >
+          <td colSpan={6}>
+            <span className="binary-diff-hunk-title">
+              Change {index + 1}
+            </span>
+            <span className="binary-diff-hunk-summary">
+              0x{formatOffset(firstChange.previousStart)} → 0x
+              {formatOffset(firstChange.currentStart)}
+              {' · '}
+              {this.getHunkSummary(hunk.changes)}
+            </span>
+          </td>
+        </tr>
+        {this.renderHunkRows(hunk.previous, hunk.current, hunk.changes)}
+      </React.Fragment>
     )
   }
 
@@ -434,7 +415,21 @@ export class BinaryFile extends React.Component<
                 : 'No byte differences found.'}
             </div>
           ) : (
-            diff.hunks.map((_, index) => this.renderHunk(index))
+            <table className="binary-diff-table">
+              <thead>
+                <tr>
+                  <th>Before offset</th>
+                  <th>Hex</th>
+                  <th>ASCII</th>
+                  <th>After offset</th>
+                  <th>Hex</th>
+                  <th>ASCII</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diff.hunks.map((_, index) => this.renderHunk(index))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>

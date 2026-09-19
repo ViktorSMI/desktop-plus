@@ -1,0 +1,43 @@
+name: Format binary diff once
+
+on:
+  push:
+    branches:
+      - feature/binary-diff-v2
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/binary-diff-v2
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: yarn
+      - run: yarn --frozen-lockfile
+      - name: Format binary diff files
+        run: >
+          yarn prettier --write
+          app/src/lib/binary-diff.ts
+          app/src/lib/git/diff.ts
+          app/src/models/diff/diff-data.ts
+          app/src/ui/diff/binary-file.tsx
+          app/styles/ui/_diff.scss
+          app/test/unit/binary-diff-test.ts
+          app/test/unit/stores/updates/update-changed-files-test.ts
+      - name: Remove formatter and commit
+        run: |
+          rm .github/workflows/format-binary-diff-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Format binary diff implementation"
+          git push origin HEAD:feature/binary-diff-v2

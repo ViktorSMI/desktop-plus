@@ -130,8 +130,9 @@ function findSyncPointInWindow(
         continue
       }
 
-      const score = previousAdvance + currentAdvance
       const shiftDelta = Math.abs(previousAdvance - currentAdvance)
+      const score =
+        Math.max(previousAdvance, currentAdvance) + shiftDelta * 4
 
       if (
         score < bestScore ||

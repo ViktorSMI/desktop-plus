@@ -86,7 +86,8 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/ci.yml .github/workflows/issue-reader-ui.yml .github/workflows/release-v3.6.6-beta3.yml .gitignore app docs/testing/issue-reader-screenshots.md package.json
+          git add .github/workflows/ci.yml .github/workflows/release-v3.6.6-beta3.yml .gitignore app docs/testing/issue-reader-screenshots.md package.json
+          git add -f .github/workflows/issue-reader-ui.yml
           git diff --cached --stat
           git commit -m 'Fix issue reader layout and add real UI screenshot tests'
           git push origin HEAD:fix/issue-reader-layout

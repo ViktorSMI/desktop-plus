@@ -69,8 +69,8 @@ export class BinaryFile extends React.Component<
     activeHunk: 0,
   }
 
-  public componentDidUpdate(previousProps: IBinaryFileProps) {
-    if (previousProps.diff !== this.props.diff && this.state.activeHunk !== 0) {
+  public componentDidUpdate(prevProps: IBinaryFileProps) {
+    if (prevProps.diff !== this.props.diff && this.state.activeHunk !== 0) {
       this.setState({ activeHunk: 0 })
     }
   }
@@ -323,7 +323,6 @@ export class BinaryFile extends React.Component<
         className={`binary-diff-hunk${isActive ? ' active' : ''}`}
         id={`binary-diff-hunk-${index}`}
         key={index}
-        onMouseDown={() => this.setState({ activeHunk: index })}
       >
         <div className="binary-diff-hunk-header">
           <span className="binary-diff-hunk-title">Change {index + 1}</span>

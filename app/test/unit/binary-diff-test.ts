@@ -40,6 +40,24 @@ describe('binary diff', () => {
     ])
   })
 
+  it('prefers replacement alignment in repeated byte regions', () => {
+    const previous = Buffer.alloc(512, 0)
+    const current = Buffer.from(previous)
+    current.fill(0xff, 128, 160)
+
+    const result = findBinaryChanges(previous, current)
+
+    assert.equal(result.truncated, false)
+    assert.deepStrictEqual(result.changes, [
+      {
+        previousStart: 128,
+        previousLength: 32,
+        currentStart: 128,
+        currentLength: 32,
+      },
+    ])
+  })
+
   it('resynchronizes after an insertion', () => {
     const previous = patternedBuffer(320)
     const current = Buffer.concat([

@@ -64,6 +64,7 @@ jobs:
           p.write_text(s)
           PY
           git rm .github/issue-reader-changes.*.gzpart .github/workflows/issue-reader-development.yml
+          git add --dry-run -f .github/workflows/issue-reader-ui.yml docs/testing/issue-reader-screenshots.md
       - name: Install Electron display dependencies
         run: |
           sudo apt-get update -q
@@ -86,8 +87,33 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/ci.yml .github/workflows/release-v3.6.6-beta3.yml .gitignore app docs/testing/issue-reader-screenshots.md package.json
-          git add -f .github/workflows/issue-reader-ui.yml
+          git add -f \
+            .github/workflows/ci.yml \
+            .github/workflows/issue-reader-ui.yml \
+            .github/workflows/release-v3.6.6-beta3.yml \
+            .gitignore \
+            app/app-info.ts \
+            app/src/lib/api.ts \
+            app/src/lib/globals.d.ts \
+            app/src/models/popup.ts \
+            app/src/ui/app.tsx \
+            app/src/ui/branches/branches-container.tsx \
+            app/src/ui/branches/issue-detail.tsx \
+            app/src/ui/branches/issue-list.tsx \
+            app/src/ui/index.tsx \
+            app/src/ui/lib/sandboxed-markdown.tsx \
+            app/styles/ui/_branches.scss \
+            app/styles/ui/_dialog.scss \
+            app/styles/ui/dialogs/_issue-reader.scss \
+            app/test/e2e/issue-reader-driver.ts \
+            app/test/e2e/issue-reader.e2e.ts \
+            app/test/e2e/playwright.config.ts \
+            app/test/globals.mts \
+            app/test/unit/issue-comments-test.ts \
+            app/webpack.common.ts \
+            docs/testing/issue-reader-screenshots.md \
+            package.json
+          git diff --cached --check
           git diff --cached --stat
           git commit -m 'Fix issue reader layout and add real UI screenshot tests'
           git push origin HEAD:fix/issue-reader-layout

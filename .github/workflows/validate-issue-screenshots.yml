@@ -28,7 +28,7 @@ jobs:
         with:
           ref: test/issue-reader-screenshots
           submodules: recursive
-      - name: Integrate screenshot tests with current issue dialog
+      - name: Integrate tested reader without changing release configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -48,6 +48,7 @@ jobs:
           app/app-info.ts
           app/src/lib/globals.d.ts
           app/src/ui/index.tsx
+          app/src/ui/lib/sandboxed-markdown.tsx
           app/test/globals.mts
           app/test/e2e/issue-reader-driver.ts
           app/test/e2e/issue-reader.e2e.ts
@@ -60,23 +61,36 @@ jobs:
               p = Path(name)
               p.parent.mkdir(parents=True, exist_ok=True)
               shutil.copyfile(donor / name, p)
-          def edit(name, before, after):
-              p = Path(name)
-              s = p.read_text()
-              if before not in s:
-                  raise ValueError('Missing replacement in ' + name + ': ' + before[:80])
-              p.write_text(s.replace(before, after))
-          edit('app/test/e2e/issue-reader-driver.ts', '  interface Window {', '  // Augment the browser interface from lib.dom.d.ts.\n  // eslint-disable-next-line @typescript-eslint/naming-convention\n  interface Window {')
-          edit('app/test/e2e/issue-reader-driver.ts', "import { Owner }", "import { Repository, RepositoryWithGitHubRepository } from '../../src/models/repository'\nimport { Owner }")
-          edit('app/test/e2e/issue-reader-driver.ts', "event.target.id === 'issue-reader'", "event.target.id === 'issue-detail-dialog'")
-          edit('app/test/e2e/issue-reader-driver.ts', 'type: PopupType.IssueReader,\n          repository,', "type: PopupType.IssueDetail,\n          repository: new Repository('issue-reader-e2e', -42, repository, false) as RepositoryWithGitHubRepository,")
+          p = Path('app/src/ui/branches/issue-detail-dialog.tsx')
+          s = (donor / 'app/src/ui/branches/issue-detail.tsx').read_text()
+          s = s.replace('IssueReader', 'IssueDetailDialog').replace('IIssueReader', 'IIssueDetailDialog').replace('id="issue-reader"', 'id="issue-detail-dialog"')
+          s = s.replace('componentDidUpdate(previous: IIssueDetailDialogProps)', 'componentDidUpdate(prevProps: IIssueDetailDialogProps)').replace('previous.repository.hash', 'prevProps.repository.hash').replace('previous.issueNumber', 'prevProps.issueNumber')
+          s = s.replace('          tabIndex={0}', '          // The read-only scroll region supports keyboard scrolling.\n          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex\n          tabIndex={0}')
+          p.write_text(s)
+          p = Path('app/test/e2e/issue-reader-driver.ts')
+          s = p.read_text().replace('  interface Window {', '  // Augment the browser interface from lib.dom.d.ts.\n  // eslint-disable-next-line @typescript-eslint/naming-convention\n  interface Window {')
+          s = s.replace("event.target.id === 'issue-reader'", "event.target.id === 'issue-detail-dialog'").replace('PopupType.IssueReader', 'PopupType.IssueDetail')
+          p.write_text(s)
+          p = Path('app/webpack.common.ts')
+          s = p.read_text().replace("        include: path.resolve(__dirname, 'src'),", "        include: [\n          path.resolve(__dirname, 'src'),\n          ...(process.env.DESKTOP_E2E === '1'\n            ? [path.resolve(__dirname, 'test/e2e/issue-reader-driver.ts')]\n            : []),\n        ],", 1)
+          p.write_text(s)
+          p = Path('app/src/ui/lib/sandboxed-markdown.tsx')
+          s = p.read_text().replace('  private readonly contentResizeObserver: ResizeObserver', '  private readonly contentResizeObserver: ResizeObserver\n  private heightUpdateFrame: number | null = null')
+          s = s.replace('new ResizeObserver(this.refreshHeight)', 'new ResizeObserver(this.scheduleHeightUpdate)')
+          s = s.replace('  private onFrameRef = (frameRef: HTMLIFrameElement | null) => {', '  // Defer iframe height writes until after ResizeObserver layout delivery.\n  private scheduleHeightUpdate = () => {\n    if (this.heightUpdateFrame !== null) {\n      return\n    }\n    this.heightUpdateFrame = requestAnimationFrame(() => {\n      this.heightUpdateFrame = null\n      this.refreshHeight()\n    })\n  }\n\n  private stopObservingContent = () => {\n    this.contentResizeObserver.disconnect()\n    if (this.heightUpdateFrame !== null) {\n      cancelAnimationFrame(this.heightUpdateFrame)\n      this.heightUpdateFrame = null\n    }\n  }\n\n  private onFrameRef = (frameRef: HTMLIFrameElement | null) => {')
+          s = s.replace('    const oldDocument = this.frameRef.contentDocument\n    this.contentResizeObserver.disconnect()', '    const oldDocument = this.frameRef.contentDocument\n    this.stopObservingContent()')
+          s = s.replace('  public componentWillUnmount() {\n    this.contentResizeObserver.disconnect()', '  public componentWillUnmount() {\n    this.stopObservingContent()')
+          s = s.replace('    this.contentResizeObserver.disconnect()\n    this.contentResizeObserver.observe(doc.documentElement)', '    this.stopObservingContent()\n    this.contentResizeObserver.observe(doc.documentElement)')
+          p.write_text(s)
+          p = Path('app/styles/ui/dialogs/_issue-detail.scss')
+          s = (donor / 'app/styles/ui/dialogs/_issue-reader.scss').read_text().replace('#issue-reader', '#issue-detail-dialog')
+          s = s.replace('  > .dialog-header {\n    flex: 0 0 auto;\n  }', '  > .dialog-header {\n    flex: 0 0 auto;\n    h1 { flex: 1; min-width: 0; width: auto; }\n    .close { margin-right: 0; }\n  }').replace('    font-size: var(--font-size-lg);', '    font-size: 20px;')
+          p.write_text(p.read_text() + '\n' + s)
           p = Path('app/test/e2e/issue-reader.e2e.ts')
-          s = p.read_text().replace('#issue-reader', '#issue-detail-dialog').replace("name: 'Issue discussion'", "name: 'Issue description and comments'")
-          s = s.replace("name: 'Show more comments', exact: true", "name: /^Show more comments/").replace('Unable to load this issue', 'Unable to load issue')
-          s = s.replace('.issue-reader-status', '.issue-detail-status').replace('.issue-reader-title', '.issue-detail-title')
+          s = p.read_text().replace('#issue-reader', '#issue-detail-dialog')
           s = s.replace('    const close = page\n', '    if (page.isClosed()) {\n      return\n    }\n    const close = page\n', 1)
           s = s.replace('    .toBe(true)\n  await expect(\n    page', '''    .toBe(true)
-            for (const selector of ['.dialog-header .close', '.issue-reader-footer']) {
+            for (const selector of ['.dialog-header .close', '.dialog-footer']) {
               await expect.poll(() => page.locator(`#issue-detail-dialog ${selector}`).evaluate(element => {
                 const box = element.getBoundingClientRect()
                 return box.left >= 0 && box.right <= innerWidth && box.bottom <= innerHeight
@@ -85,28 +99,11 @@ jobs:
             await expect(
               page''', 1)
           p.write_text(s)
-          edit('app/webpack.common.ts', "        include: path.resolve(__dirname, 'src'),", "        include: [\n          path.resolve(__dirname, 'src'),\n          ...(process.env.DESKTOP_E2E === '1'\n            ? [path.resolve(__dirname, 'test/e2e/issue-reader-driver.ts')]\n            : []),\n        ],")
-          p = Path('app/src/ui/lib/sandboxed-markdown.tsx')
-          s = p.read_text()
-          before = '  private readonly contentResizeObserver = new ResizeObserver(() => {\n    this.refreshHeight()\n  })'
-          assert before in s
-          s = s.replace(before, '  private heightUpdateFrame: number | null = null\n  private readonly contentResizeObserver = new ResizeObserver(() => {\n    if (this.heightUpdateFrame !== null) {\n      return\n    }\n    // Defer iframe height writes until after ResizeObserver layout delivery.\n    this.heightUpdateFrame = requestAnimationFrame(() => {\n      this.heightUpdateFrame = null\n      this.refreshHeight()\n    })\n  })')
-          s = s.replace('    this.contentResizeObserver.disconnect()', '    this.stopObservingContent()')
-          s = s.replace('  private onFrameRef = (frameRef: HTMLIFrameElement | null) => {', '  private stopObservingContent = () => {\n    this.contentResizeObserver.disconnect()\n    if (this.heightUpdateFrame !== null) {\n      cancelAnimationFrame(this.heightUpdateFrame)\n      this.heightUpdateFrame = null\n    }\n  }\n\n  private onFrameRef = (frameRef: HTMLIFrameElement | null) => {')
-          p.write_text(s)
-          edit('app/src/ui/branches/issue-detail-dialog.tsx', '  private onJumpToComments = () => {', '  private onJumpToDescription = () => {\n    this.scrollRef.current?.focus({ preventScroll: true })\n    this.scrollRef.current?.scrollTo({ top: 0 })\n  }\n\n  private onJumpToComments = () => {')
-          edit('app/src/ui/branches/issue-detail-dialog.tsx', '<div className="issue-reader-toolbar-actions">', '<div className="issue-reader-toolbar-actions">\n              <Button onClick={this.onJumpToDescription} disabled={loading}>Description</Button>')
-          p = Path('app/styles/ui/dialogs/_issue-detail.scss')
-          s = p.read_text().replace('dialog#issue-detail-dialog {', 'dialog#issue-detail-dialog {\n  position: fixed;\n  inset: 32px 0 0;\n  margin: auto;\n  min-height: 0;\n  min-width: 0;\n  overflow: hidden;\n  > .dialog-header {\n    flex: 0 0 auto;\n    h1 { flex: 1; min-width: 0; width: auto; }\n    .close { margin-right: 0; }\n  }', 1)
-          s = s.replace('    font-size: var(--font-size-lg);', '    font-size: 20px;')
-          p.write_text(s)
-          p = Path('app/src/ui/branches/issue-detail.tsx')
-          s = p.read_text().replace('interface IIssueDetailProps {', 'const MarkdownStyles = `\n  body { overflow-wrap: anywhere; }\n  pre { max-width: 100%; overflow-x: auto; }\n  table { display: block; max-width: 100%; overflow-x: auto; }\n`\n\ninterface IIssueDetailProps {')
-          s = s.replace('<SandboxedMarkdown\n', '<SandboxedMarkdown\n              customCSS={MarkdownStyles}\n')
-          p.write_text(s)
-          edit('.github/workflows/issue-reader-ui.yml', 'branches: [main, fix/issue-reader-layout]', 'branches: [main, test/issue-reader-screenshots]')
-          edit('docs/testing/issue-reader-screenshots.md', 'IssueReader, styles', 'IssueDetailDialog, styles')
-          paths += ['app/webpack.common.ts', 'app/src/ui/lib/sandboxed-markdown.tsx', 'app/src/ui/branches/issue-detail-dialog.tsx', 'app/src/ui/branches/issue-detail.tsx', 'app/styles/ui/dialogs/_issue-detail.scss']
+          p = Path('.github/workflows/issue-reader-ui.yml')
+          p.write_text(p.read_text().replace('branches: [main, fix/issue-reader-layout]', 'branches: [main, test/issue-reader-screenshots]'))
+          p = Path('docs/testing/issue-reader-screenshots.md')
+          p.write_text(p.read_text().replace('IssueReader, styles', 'IssueDetailDialog, styles'))
+          paths += ['app/webpack.common.ts', 'app/src/ui/branches/issue-detail-dialog.tsx', 'app/styles/ui/dialogs/_issue-detail.scss']
           Path('/tmp/reader-files').write_text('\n'.join(paths) + '\n')
           PY
           git rm .github/issue-reader-changes.*.gzpart .github/workflows/validate-issue-screenshots.yml
@@ -121,7 +118,7 @@ jobs:
           arch: x64
       - name: Format and lint
         run: |
-          xargs -d '\n' ./node_modules/.bin/prettier --write < /tmp/reader-files
+          xargs -d '\n' ./node_modules/.bin/prettier --write --ignore-unknown < /tmp/reader-files
           yarn lint
       - name: Preserve source for review
         run: |

@@ -13,6 +13,7 @@ const MaxAnchorCandidates = 8
 const MaxChangeRegions = 4096
 const MaxRenderedHunks = 512
 const MaxBytesPerHunkSide = 1024
+const MaxGroupedChangeSpan = MaxBytesPerHunkSide - BinaryContextBytes * 2
 const PreviewBytesPerHunkEdge = MaxBytesPerHunkSide / 2
 
 const ResyncWindows = [256, 4096, 64 * 1024] as const
@@ -378,10 +379,19 @@ function groupChanges(
     const currentGap =
       change.currentStart -
       (previousChange.currentStart + previousChange.currentLength)
+    const firstChange = group[0]
+    const previousSpan =
+      change.previousStart +
+      change.previousLength -
+      firstChange.previousStart
+    const currentSpan =
+      change.currentStart + change.currentLength - firstChange.currentStart
 
     if (
       previousGap <= BinaryContextBytes * 2 &&
-      currentGap <= BinaryContextBytes * 2
+      currentGap <= BinaryContextBytes * 2 &&
+      previousSpan <= MaxGroupedChangeSpan &&
+      currentSpan <= MaxGroupedChangeSpan
     ) {
       group.push(change)
     } else {

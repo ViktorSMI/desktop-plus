@@ -55,6 +55,32 @@ describe('binary diff', () => {
     ])
   })
 
+  it('keeps repeated fixed-offset blocks aligned', () => {
+    const previous = Buffer.alloc(0x5000, 0)
+    const current = Buffer.from(previous)
+    const offsets = [
+      0x40, 0x840, 0x1040, 0x1840, 0x2040, 0x2840, 0x3040, 0x3840,
+      0x4040, 0x4840,
+    ]
+
+    for (const offset of offsets) {
+      current.fill(1, offset, offset + 16)
+    }
+
+    const result = findBinaryChanges(previous, current)
+
+    assert.equal(result.truncated, false)
+    assert.deepStrictEqual(
+      result.changes.map(change => [
+        change.previousStart,
+        change.previousLength,
+        change.currentStart,
+        change.currentLength,
+      ]),
+      offsets.map(offset => [offset, 16, offset, 16])
+    )
+  })
+
   it('resynchronizes after an insertion', () => {
     const previous = patternedBuffer(320)
     const current = Buffer.concat([

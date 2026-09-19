@@ -195,7 +195,12 @@ describe('updateChangedFiles', () => {
           kind: ChangesSelectionKind.WorkingDirectory,
           // an unknown file was set as selected last time
           selectedFileIDs: ['id-from-file-not-in-status'],
-          diff: { kind: DiffType.Binary },
+          diff: {
+            kind: DiffType.Binary,
+            hunks: [],
+            changeCount: 0,
+            hunksTruncated: false,
+          },
         },
       })
 
@@ -214,7 +219,12 @@ describe('updateChangedFiles', () => {
 
       // first file was selected the last time we updated state
       const selectedFileIDs = [files[0].id]
-      const diff: IBinaryDiff = { kind: DiffType.Binary }
+      const diff: IBinaryDiff = {
+        kind: DiffType.Binary,
+        hunks: [],
+        changeCount: 0,
+        hunksTruncated: false,
+      }
 
       const prevState = createState({
         workingDirectory,

@@ -381,9 +381,7 @@ function groupChanges(
       (previousChange.currentStart + previousChange.currentLength)
     const firstChange = group[0]
     const previousSpan =
-      change.previousStart +
-      change.previousLength -
-      firstChange.previousStart
+      change.previousStart + change.previousLength - firstChange.previousStart
     const currentSpan =
       change.currentStart + change.currentLength - firstChange.currentStart
 

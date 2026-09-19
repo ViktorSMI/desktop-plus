@@ -325,9 +325,7 @@ export class BinaryFile extends React.Component<
           id={`binary-diff-hunk-${index}`}
         >
           <td colSpan={6}>
-            <span className="binary-diff-hunk-title">
-              Change {index + 1}
-            </span>
+            <span className="binary-diff-hunk-title">Change {index + 1}</span>
             <span className="binary-diff-hunk-summary">
               0x{formatOffset(firstChange.previousStart)} → 0x
               {formatOffset(firstChange.currentStart)}

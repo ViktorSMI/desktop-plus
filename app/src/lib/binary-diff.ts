@@ -86,11 +86,7 @@ function findSyncPointInWindow(
 
   const currentAnchors = new Map<number, number[]>()
 
-  for (
-    let offset = currentOffset;
-    offset <= currentLastAnchor;
-    offset++
-  ) {
+  for (let offset = currentOffset; offset <= currentLastAnchor; offset++) {
     const hash = anchorHash(current, offset)
     const positions = currentAnchors.get(hash)
 
@@ -117,9 +113,7 @@ function findSyncPointInWindow(
     }
 
     for (const currentAnchor of candidates) {
-      if (
-        !anchorMatches(previous, current, previousAnchor, currentAnchor)
-      ) {
+      if (!anchorMatches(previous, current, previousAnchor, currentAnchor)) {
         continue
       }
 
@@ -131,8 +125,7 @@ function findSyncPointInWindow(
       }
 
       const shiftDelta = Math.abs(previousAdvance - currentAdvance)
-      const score =
-        Math.max(previousAdvance, currentAdvance) + shiftDelta * 4
+      const score = Math.max(previousAdvance, currentAdvance) + shiftDelta * 4
 
       if (
         score < bestScore ||
@@ -235,10 +228,7 @@ export function findBinaryChanges(
   let previousOffset = commonPrefixLength
   let currentOffset = commonPrefixLength
 
-  while (
-    previousOffset < previousLimit ||
-    currentOffset < currentLimit
-  ) {
+  while (previousOffset < previousLimit || currentOffset < currentLimit) {
     while (
       previousOffset < previousLimit &&
       currentOffset < currentLimit &&
@@ -248,10 +238,7 @@ export function findBinaryChanges(
       currentOffset++
     }
 
-    if (
-      previousOffset >= previousLimit &&
-      currentOffset >= currentLimit
-    ) {
+    if (previousOffset >= previousLimit && currentOffset >= currentLimit) {
       break
     }
 
@@ -312,8 +299,7 @@ function createSegments(
   }
 
   const startKey = side === 'previous' ? 'previousStart' : 'currentStart'
-  const lengthKey =
-    side === 'previous' ? 'previousLength' : 'currentLength'
+  const lengthKey = side === 'previous' ? 'previousLength' : 'currentLength'
 
   const first = changes[0]
   const last = changes[changes.length - 1]
@@ -321,9 +307,7 @@ function createSegments(
   const changeStart = first[startKey]
   const changeEnd = last[startKey] + last[lengthKey]
 
-  const displayStart = alignDown(
-    Math.max(0, changeStart - BinaryContextBytes)
-  )
+  const displayStart = alignDown(Math.max(0, changeStart - BinaryContextBytes))
   const displayEnd = Math.min(
     data.length,
     alignUp(Math.min(data.length, changeEnd + BinaryContextBytes))
@@ -429,7 +413,6 @@ export function createBinaryDiff(
       current: createSegments(current, changes, 'current'),
     })),
     changeCount: search.changes.length,
-    hunksTruncated:
-      search.truncated || groups.length > MaxRenderedHunks,
+    hunksTruncated: search.truncated || groups.length > MaxRenderedHunks,
   }
 }

@@ -70,10 +70,7 @@ export class BinaryFile extends React.Component<
   }
 
   public componentDidUpdate(previousProps: IBinaryFileProps) {
-    if (
-      previousProps.diff !== this.props.diff &&
-      this.state.activeHunk !== 0
-    ) {
+    if (previousProps.diff !== this.props.diff && this.state.activeHunk !== 0) {
       this.setState({ activeHunk: 0 })
     }
   }
@@ -139,8 +136,7 @@ export class BinaryFile extends React.Component<
         segment !== undefined && dataIndex < segment.data.length
           ? segment.data[dataIndex]
           : undefined
-      const offset =
-        segment === undefined ? 0 : segment.offset + dataIndex
+      const offset = segment === undefined ? 0 : segment.offset + dataIndex
       const changed =
         value !== undefined && this.isChanged(offset, changes, side)
 
@@ -148,7 +144,9 @@ export class BinaryFile extends React.Component<
         <span
           className={
             changed
-              ? `hex-byte ${side === 'previous' ? 'hex-byte-removed' : 'hex-byte-added'}`
+              ? `hex-byte ${
+                  side === 'previous' ? 'hex-byte-removed' : 'hex-byte-added'
+                }`
               : 'hex-byte'
           }
           key={column}
@@ -177,8 +175,7 @@ export class BinaryFile extends React.Component<
         segment !== undefined && dataIndex < segment.data.length
           ? segment.data[dataIndex]
           : undefined
-      const offset =
-        segment === undefined ? 0 : segment.offset + dataIndex
+      const offset = segment === undefined ? 0 : segment.offset + dataIndex
       const changed =
         value !== undefined && this.isChanged(offset, changes, side)
 
@@ -186,7 +183,9 @@ export class BinaryFile extends React.Component<
         <span
           className={
             changed
-              ? `hex-ascii-byte ${side === 'previous' ? 'hex-byte-removed' : 'hex-byte-added'}`
+              ? `hex-ascii-byte ${
+                  side === 'previous' ? 'hex-byte-removed' : 'hex-byte-added'
+                }`
               : 'hex-ascii-byte'
           }
           key={column}
@@ -194,8 +193,8 @@ export class BinaryFile extends React.Component<
           {value === undefined
             ? ' '
             : isPrintable(value)
-              ? String.fromCharCode(value)
-              : '.'}
+            ? String.fromCharCode(value)
+            : '.'}
         </span>
       )
     }
@@ -215,9 +214,7 @@ export class BinaryFile extends React.Component<
     return (
       <>
         <td className="hex-offset">
-          {hasData
-            ? formatOffset(segment.offset + rowIndex * BytesPerRow)
-            : ''}
+          {hasData ? formatOffset(segment.offset + rowIndex * BytesPerRow) : ''}
         </td>
         <td className="hex-bytes">
           {this.renderHexBytes(segment, rowIndex, changes, side)}
@@ -288,12 +285,7 @@ export class BinaryFile extends React.Component<
       for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
         rows.push(
           <tr key={`segment-${segmentIndex}-row-${rowIndex}`}>
-            {this.renderSide(
-              previousSegment,
-              rowIndex,
-              changes,
-              'previous'
-            )}
+            {this.renderSide(previousSegment, rowIndex, changes, 'previous')}
             {this.renderSide(currentSegment, rowIndex, changes, 'current')}
           </tr>
         )
@@ -316,7 +308,9 @@ export class BinaryFile extends React.Component<
       return `${formatByteCount(previousBytes)} changed`
     }
 
-    return `${formatByteCount(previousBytes)} removed, ${formatByteCount(currentBytes)} added`
+    return `${formatByteCount(previousBytes)} removed, ${formatByteCount(
+      currentBytes
+    )} added`
   }
 
   private renderHunk(index: number) {
@@ -360,11 +354,7 @@ export class BinaryFile extends React.Component<
             </tr>
           </thead>
           <tbody>
-            {this.renderHunkRows(
-              hunk.previous,
-              hunk.current,
-              hunk.changes
-            )}
+            {this.renderHunkRows(hunk.previous, hunk.current, hunk.changes)}
           </tbody>
         </table>
       </section>
@@ -403,13 +393,14 @@ export class BinaryFile extends React.Component<
                 Previous
               </Button>
               <span className="binary-diff-position">
-                {hunkCount === 0 ? '0 / 0' : `${this.state.activeHunk + 1} / ${hunkCount}`}
+                {hunkCount === 0
+                  ? '0 / 0'
+                  : `${this.state.activeHunk + 1} / ${hunkCount}`}
               </span>
               <Button
                 size="small"
                 disabled={
-                  hunkCount === 0 ||
-                  this.state.activeHunk >= hunkCount - 1
+                  hunkCount === 0 || this.state.activeHunk >= hunkCount - 1
                 }
                 onClick={this.nextHunk}
               >

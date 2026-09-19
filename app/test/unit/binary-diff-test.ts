@@ -1,10 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert'
 
-import {
-  createBinaryDiff,
-  findBinaryChanges,
-} from '../../src/lib/binary-diff'
+import { createBinaryDiff, findBinaryChanges } from '../../src/lib/binary-diff'
 
 function patternedBuffer(length: number) {
   return Buffer.from(

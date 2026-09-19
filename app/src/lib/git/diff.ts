@@ -652,10 +652,7 @@ async function getWorkingDirectoryBinaryContents(
 ): Promise<IBinaryBufferContents> {
   const fullPath = Path.join(repository.path, file.path)
   const fileStats = await stat(fullPath)
-  const bytesToRead = Math.min(
-    fileStats.size,
-    MaxBinaryDiffPreviewBytes + 1
-  )
+  const bytesToRead = Math.min(fileStats.size, MaxBinaryDiffPreviewBytes + 1)
   const handle = await open(fullPath, 'r')
 
   try {
@@ -663,10 +660,7 @@ async function getWorkingDirectoryBinaryContents(
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
 
     return {
-      data: buffer.subarray(
-        0,
-        Math.min(bytesRead, MaxBinaryDiffPreviewBytes)
-      ),
+      data: buffer.subarray(0, Math.min(bytesRead, MaxBinaryDiffPreviewBytes)),
       truncated: fileStats.size > MaxBinaryDiffPreviewBytes,
     }
   } finally {

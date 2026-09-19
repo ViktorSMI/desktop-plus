@@ -20,12 +20,11 @@ import {
   parseLineEndingText,
   ILargeTextDiff,
   IBinaryDiff,
-  IBinaryFileContents,
 } from '../../models/diff'
 
 import { DiffParser } from '../diff-parser'
 import { getOldPathOrDefault } from '../get-old-path'
-import { open, readFile, writeFile, unlink } from 'fs/promises'
+import { open, readFile, stat, writeFile, unlink } from 'fs/promises'
 import { getTempFilePath } from '../file-system'
 import { forceUnwrap } from '../fatal-error'
 import { git } from './core'
@@ -40,6 +39,7 @@ import { enableImagePreviewsForDDSFiles } from '../feature-flag'
 import { unstageAll } from './reset'
 import { stageFiles } from './update-index'
 import { isAbsolute } from 'path'
+import { createBinaryDiff } from '../binary-diff'
 
 /**
  * V8 has a limit on the size of string it can create (~256MB), and unless we want to
@@ -62,8 +62,19 @@ const MaxReasonableDiffSize = MaxDiffBufferSize / 16 // ~4.375MB in decimal
  */
 const MaxCharactersPerLine = 5000
 
-/** Maximum number of bytes to load from each side of a binary diff preview. */
-const MaxBinaryDiffPreviewBytes = 64 * 1024
+/**
+ * Maximum number of bytes to load from each side of a binary comparison.
+ *
+ * The renderer only receives compact hunks around actual changes, so this can
+ * be much larger than the old 64 KiB preview without creating a huge React
+ * tree. Files larger than this are clearly marked as partially compared.
+ */
+const MaxBinaryDiffPreviewBytes = 64 * 1024 * 1024
+
+interface IBinaryBufferContents {
+  readonly data: Buffer
+  readonly truncated: boolean
+}
 
 /**
  * Utility function to check whether parsing this buffer is going to cause
@@ -617,7 +628,7 @@ async function getBlobBinaryContents(
   repository: Repository,
   path: string,
   commitish: string
-): Promise<IBinaryFileContents | undefined> {
+): Promise<IBinaryBufferContents | undefined> {
   const contents = await getPartialBlobContents(
     repository,
     commitish,
@@ -630,7 +641,7 @@ async function getBlobBinaryContents(
   }
 
   return {
-    data: Array.from(contents.subarray(0, MaxBinaryDiffPreviewBytes)),
+    data: contents.subarray(0, MaxBinaryDiffPreviewBytes),
     truncated: contents.length > MaxBinaryDiffPreviewBytes,
   }
 }
@@ -638,18 +649,19 @@ async function getBlobBinaryContents(
 async function getWorkingDirectoryBinaryContents(
   repository: Repository,
   file: FileChange
-): Promise<IBinaryFileContents> {
-  const handle = await open(Path.join(repository.path, file.path), 'r')
+): Promise<IBinaryBufferContents> {
+  const fullPath = Path.join(repository.path, file.path)
+  const fileStats = await stat(fullPath)
+  const bytesToRead = Math.min(fileStats.size, MaxBinaryDiffPreviewBytes + 1)
+  const handle = await open(fullPath, 'r')
 
   try {
-    const buffer = Buffer.alloc(MaxBinaryDiffPreviewBytes + 1)
+    const buffer = Buffer.alloc(bytesToRead)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
 
     return {
-      data: Array.from(
-        buffer.subarray(0, Math.min(bytesRead, MaxBinaryDiffPreviewBytes))
-      ),
-      truncated: bytesRead > MaxBinaryDiffPreviewBytes,
+      data: buffer.subarray(0, Math.min(bytesRead, MaxBinaryDiffPreviewBytes)),
+      truncated: fileStats.size > MaxBinaryDiffPreviewBytes,
     }
   } finally {
     await handle.close()
@@ -662,12 +674,17 @@ async function getBinaryDiff(
   newestCommitish: string,
   oldestCommitish: string
 ): Promise<IBinaryDiff> {
-  let current: IBinaryFileContents | undefined = undefined
-  let previous: IBinaryFileContents | undefined = undefined
+  let current: IBinaryBufferContents | undefined = undefined
+  let previous: IBinaryBufferContents | undefined = undefined
 
   if (file instanceof WorkingDirectoryFileChange) {
     if (file.status.kind === AppFileStatusKind.Conflicted) {
-      return { kind: DiffType.Binary }
+      return {
+        kind: DiffType.Binary,
+        hunks: [],
+        changeCount: 0,
+        hunksTruncated: false,
+      }
     }
 
     if (file.status.kind !== AppFileStatusKind.Deleted) {
@@ -717,10 +734,28 @@ async function getBinaryDiff(
     }
   }
 
+  const binaryDiff = createBinaryDiff(
+    previous?.data ?? Buffer.alloc(0),
+    current?.data ?? Buffer.alloc(0)
+  )
+
   return {
     kind: DiffType.Binary,
-    previous,
-    current,
+    previous:
+      previous === undefined
+        ? undefined
+        : {
+            loadedByteLength: previous.data.length,
+            truncated: previous.truncated,
+          },
+    current:
+      current === undefined
+        ? undefined
+        : {
+            loadedByteLength: current.data.length,
+            truncated: current.truncated,
+          },
+    ...binaryDiff,
   }
 }
 

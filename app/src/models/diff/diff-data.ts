@@ -91,18 +91,53 @@ export interface IImageDiff {
 }
 
 export interface IBinaryFileContents {
-  /** Bytes included in the hex preview. */
-  readonly data: ReadonlyArray<number>
-  /** Whether the preview was truncated before the end of the file. */
+  /** Number of bytes loaded and compared from this side. */
+  readonly loadedByteLength: number
+  /** Whether the file continues beyond the loaded comparison range. */
   readonly truncated: boolean
+}
+
+export interface IBinaryDiffChange {
+  /** Start offset in the previous version. */
+  readonly previousStart: number
+  /** Number of bytes replaced or removed from the previous version. */
+  readonly previousLength: number
+  /** Start offset in the current version. */
+  readonly currentStart: number
+  /** Number of bytes replaced or inserted in the current version. */
+  readonly currentLength: number
+}
+
+export interface IBinaryDiffSegment {
+  /** Absolute byte offset of the first byte in this segment. */
+  readonly offset: number
+  /** Bytes to render for this segment. */
+  readonly data: ReadonlyArray<number>
+  /** Number of bytes omitted between this and the preceding segment. */
+  readonly omittedBefore: number
+}
+
+export interface IBinaryDiffHunk {
+  /** One or more nearby byte changes grouped into a single display hunk. */
+  readonly changes: ReadonlyArray<IBinaryDiffChange>
+  /** Previous-version display segments, including context. */
+  readonly previous: ReadonlyArray<IBinaryDiffSegment>
+  /** Current-version display segments, including context. */
+  readonly current: ReadonlyArray<IBinaryDiffSegment>
 }
 
 export interface IBinaryDiff {
   readonly kind: DiffType.Binary
-  /** Previous version of the binary file, when available. */
+  /** Previous version metadata, when available. */
   readonly previous?: IBinaryFileContents
-  /** Current version of the binary file, when available. */
+  /** Current version metadata, when available. */
   readonly current?: IBinaryFileContents
+  /** Byte-level change hunks ready for the hex comparer. */
+  readonly hunks: ReadonlyArray<IBinaryDiffHunk>
+  /** Number of byte change regions found in the loaded comparison range. */
+  readonly changeCount: number
+  /** Whether additional change regions were omitted from the rendered result. */
+  readonly hunksTruncated: boolean
 }
 
 export interface ISubmoduleDiff {

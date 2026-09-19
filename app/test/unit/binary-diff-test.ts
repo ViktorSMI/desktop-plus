@@ -120,6 +120,32 @@ describe('binary diff', () => {
     assert(result.hunks[0].current[0].offset <= 100)
   })
 
+  it('splits dense change groups before they become huge render trees', () => {
+    const previous = patternedBuffer(2048)
+    const current = Buffer.from(previous)
+
+    for (let offset = 100; offset <= 1300; offset += 60) {
+      current[offset] ^= 0xff
+    }
+
+    const result = createBinaryDiff(previous, current)
+
+    assert(result.hunks.length >= 2)
+    for (const hunk of result.hunks) {
+      const previousBytes = hunk.previous.reduce(
+        (total, segment) => total + segment.data.length,
+        0
+      )
+      const currentBytes = hunk.current.reduce(
+        (total, segment) => total + segment.data.length,
+        0
+      )
+
+      assert(previousBytes <= 1024)
+      assert(currentBytes <= 1024)
+    }
+  })
+
   it('collapses the middle of a very large changed region', () => {
     const previous = Buffer.alloc(16 * 1024, 0x11)
     const current = Buffer.alloc(16 * 1024, 0xee)

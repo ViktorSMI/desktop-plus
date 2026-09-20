@@ -47,6 +47,19 @@ jobs:
           assert text.count(field) == 1 and text.count(before) == 1
           text = text.replace(field, '').replace(before, field + before)
           source.write_text(text)
+
+          source = Path('app/test/unit/ui/remote-force-push-dialog-test.tsx')
+          text = source.read_text()
+          text = text.replace("import { describe, it } from 'node:test'", "import { afterEach, beforeEach, describe, it } from 'node:test'")
+          text = text.replace("import { ConfirmForcePush }", "import { DialogStackContext } from '../../../src/ui/dialog/dialog'\nimport { ConfirmForcePush }")
+          text = text.replace('    <ConfirmForcePush\n', '    <DialogStackContext.Provider value={{ isTopMost: true }}>\n    <ConfirmForcePush\n')
+          text = text.replace('    />\n  )', '    />\n    </DialogStackContext.Provider>\n  )')
+          template = Path('app/test/unit/ui/dialog-focus-test.tsx').read_text()
+          setup = template[template.index('const showModalDescriptor'):template.index("  it('does not restore focus")]
+          setup = setup.replace("describe('Dialog focus', () => {", "describe('remote force push confirmation', () => {")
+          marker = "describe('remote force push confirmation', () => {"
+          assert text.count(marker) == 1
+          source.write_text(text.replace(marker, setup))
       - uses: ./.github/actions/setup-ci-environment
         with:
           node-version: 24.19.0
@@ -61,11 +74,6 @@ jobs:
           files = [p for p in files if Path(p).suffix in ('.ts', '.tsx', '.scss')]
           files.append('.github/workflows/prepare-remote-force-push.yml')
           subprocess.run(['node', 'node_modules/prettier/bin-prettier.js', '--write', *files], check=True)
-      - name: Full lint and production compile
-        run: |
-          yarn lint
-          yarn validate-changelog
-          yarn compile:prod
       - name: Prepare Git test environment
         run: yarn test:setup
       - name: Test Git leases and confirmation UI
@@ -75,6 +83,11 @@ jobs:
             app/test/unit/git/remote-force-push-test.ts \
             app/test/unit/group-branches-test.ts \
             app/test/unit/ui/remote-force-push-dialog-test.tsx
+      - name: Full lint and production compile
+        run: |
+          yarn lint
+          yarn validate-changelog
+          yarn compile:prod
       - name: Commit validated implementation
         run: |
           set -euo pipefail

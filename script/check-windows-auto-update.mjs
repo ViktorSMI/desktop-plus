@@ -7,6 +7,7 @@ import {
   writeFile,
   copyFile,
   readdir,
+  stat,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -18,8 +19,23 @@ const require = createRequire(import.meta.url)
 const packager = require('@electron/packager')
 const installer = require('electron-winstaller')
 const ts = require('typescript')
-if (process.platform !== 'win32') {
-  throw new Error('This smoke test requires an isolated Windows runner')
+if (
+  process.platform !== 'win32' ||
+  process.env.GITHUB_ACTIONS !== 'true' ||
+  process.env.RUNNER_ENVIRONMENT !== 'github-hosted'
+) {
+  throw new Error(
+    'This installation test may only run on a fresh GitHub-hosted Windows runner'
+  )
+}
+const installedRoot = join(process.env.LOCALAPPDATA, 'DesktopPlus')
+if (
+  await stat(installedRoot).catch(error => {
+    if (error.code === 'ENOENT') return null
+    throw error
+  })
+) {
+  throw new Error('Refusing to replace an existing Desktop Plus installation')
 }
 const root = await mkdtemp(join(tmpdir(), 'desktop-plus-updater-smoke-'))
 const source = resolve(import.meta.dirname, '..')
@@ -55,7 +71,7 @@ const {join} = require('path')
 const {ForkUpdater} = require('./updates/fork-updater')
 const {ForkReleasesAPI, ForkManifestName} = require('./updates/fork-release')
 const root = process.env.DESKTOP_UPDATE_SMOKE_ROOT
-if (process.argv.some(a=>a.startsWith('--squirrel-'))) {
+if (process.env.DESKTOP_UPDATE_SMOKE_RUN !== '1' || process.argv.some(a=>a.startsWith('--squirrel-'))) {
   app.quit()
 } else {
   app.whenReady().then(async()=>{
@@ -92,6 +108,7 @@ if (process.argv.some(a=>a.startsWith('--squirrel-'))) {
 `
 
 async function build(version, nugetVersion) {
+  console.log(`Packaging ${version} as ${nugetVersion}`)
   const input = join(root, `app-${version}`)
   await mkdir(join(input, 'updates'), { recursive: true })
   await writeFile(
@@ -186,18 +203,23 @@ await writeFile(
     ],
   })
 )
+console.log('Installing the older fixture without starting the update yet')
 await run(join(oldDirectory, 'Setup.exe'), ['--silent'], {
   DESKTOP_UPDATE_SMOKE_ROOT: root,
 })
 // Installer launches are squirrel lifecycle events; allow its file lock to clear.
 await new Promise(resolve => setTimeout(resolve, 15000))
-const installedRoot = join(process.env.LOCALAPPDATA, 'DesktopPlus')
 const installed = (await readdir(installedRoot)).find(name =>
   name.startsWith('app-')
 )
 assert(installed, 'Squirrel installation missing')
+console.log('Starting the installed fixture and waiting for the updated executable')
 const child = spawn(join(installedRoot, installed, 'DesktopPlus.exe'), [], {
-  env: { ...process.env, DESKTOP_UPDATE_SMOKE_ROOT: root },
+  env: {
+    ...process.env,
+    DESKTOP_UPDATE_SMOKE_ROOT: root,
+    DESKTOP_UPDATE_SMOKE_RUN: '1',
+  },
   stdio: 'inherit',
 })
 const deadline = Date.now() + 180000

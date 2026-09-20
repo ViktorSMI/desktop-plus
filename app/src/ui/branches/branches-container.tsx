@@ -27,10 +27,7 @@ import { BranchList } from './branch-list'
 import { PullRequestList } from './pull-request-list'
 import { IssueList } from './issue-list'
 import { IssuesStore } from '../../lib/stores/issues-store'
-import {
-  filterBranchesByRemote,
-  IBranchListItem,
-} from './group-branches'
+import { filterBranchesByRemote, IBranchListItem } from './group-branches'
 import { BranchSortOrder } from '../../models/branch-sort-order'
 import {
   getDefaultAriaLabelForBranch,
@@ -344,7 +341,9 @@ export class BranchesContainer extends React.Component<
           <span className="remote-switcher-description">
             {selectedRemote === null
               ? `${this.state.remotes.length} remotes`
-              : `${this.getRemoteBranchCount(selectedRemote.name)} remote branches · ${this.getRemoteHost(selectedRemote)}`}
+              : `${this.getRemoteBranchCount(
+                  selectedRemote.name
+                )} remote branches · ${this.getRemoteHost(selectedRemote)}`}
           </span>
 
           <div className="remote-switcher-actions">

@@ -1,9 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert'
-import {
-  filterBranchesByRemote,
-  groupBranches,
-} from '../../src/ui/branches'
+import { filterBranchesByRemote, groupBranches } from '../../src/ui/branches'
 import { Branch, BranchType } from '../../src/models/branch'
 import { CommitIdentity } from '../../src/models/commit-identity'
 import { BranchSortOrder } from '../../src/models/branch-sort-order'

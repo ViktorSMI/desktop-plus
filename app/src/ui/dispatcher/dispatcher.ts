@@ -838,12 +838,25 @@ export class Dispatcher {
     return this.appStore._push(repository)
   }
 
+  /** Push the current branch to one remote without changing its upstream. */
+  public pushToRemote(repository: Repository, remote: IRemote): Promise<void> {
+    return this.appStore._pushToRemote(repository, remote)
+  }
+
   private pushWithOptions(repository: Repository, options?: PushOptions) {
     if (options !== undefined && options.forceWithLease) {
       this.dropCurrentBranchFromForcePushList(repository)
     }
 
     return this.appStore._push(repository, options)
+  }
+
+  /** Pull the same-named branch from one remote without changing upstream. */
+  public pullFromRemote(
+    repository: Repository,
+    remote: IRemote
+  ): Promise<void> {
+    return this.appStore._pullFromRemote(repository, remote)
   }
 
   /** Pull the current branch. */
@@ -888,6 +901,15 @@ export class Dispatcher {
   /** Fetch all refs for the repository */
   public fetch(repository: Repository, fetchType: FetchType): Promise<void> {
     return this.appStore._fetch(repository, fetchType)
+  }
+
+  /** Fetch refs from one specific remote. */
+  public fetchRemote(
+    repository: Repository,
+    remote: IRemote,
+    fetchType: FetchType
+  ): Promise<void> {
+    return this.appStore._fetchRemote(repository, remote, fetchType)
   }
 
   /** Publish the repository to GitHub with the given properties. */

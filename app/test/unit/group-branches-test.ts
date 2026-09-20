@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert'
-import { groupBranches } from '../../src/ui/branches'
+import { filterBranchesByRemote, groupBranches } from '../../src/ui/branches'
 import { Branch, BranchType } from '../../src/models/branch'
 import { CommitIdentity } from '../../src/models/commit-identity'
 import { BranchSortOrder } from '../../src/models/branch-sort-order'
@@ -49,6 +49,37 @@ describe('Branches grouping', () => {
   )
 
   const allBranches = [currentBranch, ...recentBranches, otherBranch]
+
+  it('filters remote branches while keeping local branches visible', () => {
+    const originBranch = new Branch(
+      'origin/master',
+      null,
+      branchTip,
+      BranchType.Remote,
+      'refs/remotes/origin/master',
+      false
+    )
+    const upstreamBranch = new Branch(
+      'upstream/master',
+      null,
+      branchTip,
+      BranchType.Remote,
+      'refs/remotes/upstream/master',
+      false
+    )
+
+    const branches = [currentBranch, originBranch, upstreamBranch]
+
+    assert.deepEqual(filterBranchesByRemote(branches, 'origin'), [
+      currentBranch,
+      originBranch,
+    ])
+    assert.deepEqual(filterBranchesByRemote(branches, 'upstream'), [
+      currentBranch,
+      upstreamBranch,
+    ])
+    assert.equal(filterBranchesByRemote(branches, null), branches)
+  })
 
   it('should group branches', () => {
     const groups = groupBranches(

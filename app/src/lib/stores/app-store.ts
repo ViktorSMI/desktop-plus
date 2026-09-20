@@ -6231,6 +6231,15 @@ export class AppStore extends TypedBaseStore<IAppState> {
     })
   }
 
+  public async _pushToRemote(
+    repository: Repository,
+    remote: IRemote
+  ): Promise<void> {
+    return this.withRefreshedGitHubRepository(repository, repository => {
+      return this.performPush(repository, undefined, remote)
+    })
+  }
+
   private getBranchToPush(
     repository: Repository,
     options?: PushOptions
@@ -6260,10 +6269,11 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
   private async performPush(
     repository: Repository,
-    options?: PushOptions
+    options?: PushOptions,
+    remoteOverride?: IRemote
   ): Promise<void> {
     const state = this.repositoryStateCache.get(repository)
-    const { remote } = state
+    const remote = remoteOverride ?? state.remote
     if (remote === null) {
       this._showPopup({
         type: PopupType.PublishRepository,
@@ -6280,7 +6290,8 @@ export class AppStore extends TypedBaseStore<IAppState> {
         return
       }
 
-      const remoteName = branch.upstreamRemoteName || remote.name
+      const remoteName =
+        remoteOverride?.name ?? branch.upstreamRemoteName ?? remote.name
 
       const pushTitle = `Pushing to ${remoteName}`
 
@@ -6312,6 +6323,8 @@ export class AppStore extends TypedBaseStore<IAppState> {
         type: RetryActionType.Push,
         repository,
       }
+      const failableOptions =
+        remoteOverride === undefined ? { retryAction } : undefined
 
       // This is most likely not necessary and is only here out of
       // an abundance of caution. We're introducing support for
@@ -6342,9 +6355,12 @@ export class AppStore extends TypedBaseStore<IAppState> {
       // I'm also adding a non fatal exception if this ever happens
       // so that we can confidently remove this safeguard in a future
       // release.
-      const safeRemote: IRemote = { name: remoteName, url: remote.url }
+      const safeRemote: IRemote = remoteOverride ?? {
+        name: remoteName,
+        url: remote.url,
+      }
 
-      if (safeRemote.name !== remote.name) {
+      if (remoteOverride === undefined && safeRemote.name !== remote.name) {
         sendNonFatalException(
           'remoteNameMismatch',
           new Error('The current remote name differs from the branch remote')
@@ -6352,69 +6368,70 @@ export class AppStore extends TypedBaseStore<IAppState> {
       }
 
       const gitStore = this.gitStoreCache.get(repository)
-      await gitStore.performFailableOperation(
-        async () => {
-          let aborted = false
-          await pushRepo(
-            repository,
-            safeRemote,
-            branch.name,
-            branch.upstreamWithoutRemote,
-            gitStore.tagsToPush,
-            {
-              onHookFailure: this.onHookFailure(() => (aborted = true)),
-              ...options,
-            },
-            progress => {
-              this.updatePushPullFetchProgress(repository, {
-                ...progress,
-                title: pushTitle,
-                value: pushWeight * progress.value,
-              })
-            }
-          ).catch(err => (aborted ? undefined : Promise.reject(err)))
-
-          if (aborted) {
-            return
-          }
-
-          gitStore.clearTagsToPush()
-
-          await gitStore.fetchRemotes([safeRemote], false, fetchProgress => {
+      await gitStore.performFailableOperation(async () => {
+        let aborted = false
+        await pushRepo(
+          repository,
+          safeRemote,
+          branch.name,
+          remoteOverride
+            ? branch.nameWithoutRemote
+            : branch.upstreamWithoutRemote,
+          remoteOverride ? null : gitStore.tagsToPush,
+          {
+            onHookFailure: this.onHookFailure(() => (aborted = true)),
+            ...options,
+          },
+          progress => {
             this.updatePushPullFetchProgress(repository, {
-              ...fetchProgress,
-              value: pushWeight + fetchProgress.value * fetchWeight,
+              ...progress,
+              title: pushTitle,
+              value: pushWeight * progress.value,
             })
-          })
+          }
+        ).catch(err => (aborted ? undefined : Promise.reject(err)))
 
-          const refreshTitle = __DARWIN__
-            ? 'Refreshing Repository'
-            : 'Refreshing repository'
-          const refreshStartProgress = pushWeight + fetchWeight
+        if (aborted) {
+          return
+        }
 
+        if (remoteOverride === undefined) {
+          gitStore.clearTagsToPush()
+        }
+
+        await gitStore.fetchRemotes([safeRemote], false, fetchProgress => {
           this.updatePushPullFetchProgress(repository, {
-            kind: 'generic',
-            title: refreshTitle,
-            description: 'Fast-forwarding branches',
-            value: refreshStartProgress,
+            ...fetchProgress,
+            value: pushWeight + fetchProgress.value * fetchWeight,
           })
+        })
 
-          await this.fastForwardBranches(repository)
+        const refreshTitle = __DARWIN__
+          ? 'Refreshing Repository'
+          : 'Refreshing repository'
+        const refreshStartProgress = pushWeight + fetchWeight
 
-          this.updatePushPullFetchProgress(repository, {
-            kind: 'generic',
-            title: refreshTitle,
-            value: refreshStartProgress + refreshWeight * 0.5,
-          })
+        this.updatePushPullFetchProgress(repository, {
+          kind: 'generic',
+          title: refreshTitle,
+          description: 'Fast-forwarding branches',
+          value: refreshStartProgress,
+        })
 
-          // manually refresh branch protections after the push, to ensure
-          // any new branch will immediately report as protected
-          await this.refreshBranchProtectionState(repository)
+        await this.fastForwardBranches(repository)
 
-          await this._refreshRepository(repository)
-        },
-        { retryAction }
-      )
+        this.updatePushPullFetchProgress(repository, {
+          kind: 'generic',
+          title: refreshTitle,
+          value: refreshStartProgress + refreshWeight * 0.5,
+        })
+
+        // manually refresh branch protections after the push, to ensure
+        // any new branch will immediately report as protected
+        await this.refreshBranchProtectionState(repository)
+
+        await this._refreshRepository(repository)
+      }, failableOptions)
 
       this.updatePushPullFetchProgress(repository, null)
 
@@ -6541,6 +6558,15 @@ export class AppStore extends TypedBaseStore<IAppState> {
     })
   }
 
+  public async _pullFromRemote(
+    repository: Repository,
+    remote: IRemote
+  ): Promise<void> {
+    return this.withRefreshedGitHubRepository(repository, repository => {
+      return this.performPull(repository, true, remote)
+    })
+  }
+
   /**
    * Switch the repository to its default branch and pull it.
    *
@@ -6632,16 +6658,17 @@ export class AppStore extends TypedBaseStore<IAppState> {
   /** This shouldn't be called directly. See `Dispatcher`. */
   private async performPull(
     repository: Repository,
-    allowRetry = true
+    allowRetry = true,
+    remoteOverride?: IRemote
   ): Promise<void> {
     return this.withPushPullFetch(repository, async () => {
       const gitStore = this.gitStoreCache.get(repository)
 
-      if (!gitStore.currentRemote) {
+      if (remoteOverride === undefined && !gitStore.currentRemote) {
         await gitStore.loadRemotes()
       }
 
-      const remote = gitStore.currentRemote
+      const remote = remoteOverride ?? gitStore.currentRemote
 
       if (!remote) {
         throw new Error('The repository has no remotes.')
@@ -6663,23 +6690,30 @@ export class AppStore extends TypedBaseStore<IAppState> {
           `Repo ${repository.name} was in an unknown state (not loaded) when trying to pull. Refreshing repository and trying again.`
         )
         await this._refreshRepository(repository)
-        return this.performPull(repository, false)
+        return this.performPull(repository, false, remoteOverride)
       }
 
       if (tip.kind === TipState.Valid) {
         let mergeBase: string | null = null
         let gitContext: GitErrorContext | undefined = undefined
 
-        if (tip.branch.upstream !== null) {
+        const remoteBranchOverride = remoteOverride
+          ? tip.branch.nameWithoutRemote
+          : undefined
+        const theirBranch = remoteBranchOverride
+          ? `${remote.name}/${remoteBranchOverride}`
+          : tip.branch.upstream
+
+        if (theirBranch !== null) {
           mergeBase = await getMergeBase(
             repository,
             tip.branch.name,
-            tip.branch.upstream
-          )
+            theirBranch
+          ).catch(() => null)
 
           gitContext = {
             kind: 'pull',
-            theirBranch: tip.branch.upstream,
+            theirBranch,
             currentBranch: tip.branch.name,
           }
         } else {
@@ -6716,6 +6750,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
             type: RetryActionType.Pull,
             repository,
           }
+          const failableOptions =
+            remoteOverride === undefined
+              ? { gitContext, retryAction }
+              : { gitContext }
 
           if (gitStore.pullWithRebase) {
             this.statsStore.increment('pullWithRebaseCount')
@@ -6725,34 +6763,32 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
           let aborted = false
           const pullSucceeded = await gitStore
-            .performFailableOperation(
-              async () => {
-                await pullRepo(repository, remote, {
-                  progressCallback: progress => {
-                    this.updatePushPullFetchProgress(repository, {
-                      ...progress,
-                      value: progress.value * pullWeight,
+            .performFailableOperation(async () => {
+              await pullRepo(repository, remote, {
+                progressCallback: progress => {
+                  this.updatePushPullFetchProgress(repository, {
+                    ...progress,
+                    value: progress.value * pullWeight,
+                  })
+                },
+                remoteBranch: remoteBranchOverride,
+                onHookFailure: (hookName, terminalOutput) =>
+                  new Promise(resolve => {
+                    this._showPopup({
+                      type: PopupType.HookFailed,
+                      hookName,
+                      terminalOutput,
+                      resolve: resolution => {
+                        if (resolution === 'abort') {
+                          aborted = true
+                        }
+                        resolve(resolution)
+                      },
                     })
-                  },
-                  onHookFailure: (hookName, terminalOutput) =>
-                    new Promise(resolve => {
-                      this._showPopup({
-                        type: PopupType.HookFailed,
-                        hookName,
-                        terminalOutput,
-                        resolve: resolution => {
-                          if (resolution === 'abort') {
-                            aborted = true
-                          }
-                          resolve(resolution)
-                        },
-                      })
-                    }),
-                })
-                return true
-              },
-              { gitContext, retryAction }
-            )
+                  }),
+              })
+              return true
+            }, failableOptions)
             .catch(err => (aborted ? false : Promise.reject(err)))
 
           // If the pull failed we shouldn't try to update the remote HEAD
@@ -7177,7 +7213,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
    * Note that this method will not perform the fetch of the specified remote
    * if _any_ fetches or pulls are currently in-progress.
    */
-  private _fetchRemote(
+  public _fetchRemote(
     repository: Repository,
     remote: IRemote,
     fetchType: FetchType

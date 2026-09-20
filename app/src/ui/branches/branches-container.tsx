@@ -7,7 +7,9 @@ import {
 } from '../../models/repository'
 import { Branch } from '../../models/branch'
 import { BranchesTab } from '../../models/branches-tab'
+import { FetchType } from '../../models/fetch'
 import { PopupType } from '../../models/popup'
+import { IRemote } from '../../models/remote'
 
 import { Dispatcher } from '../dispatcher'
 import { FoldoutType } from '../../lib/app-state'
@@ -16,7 +18,8 @@ import { assertNever } from '../../lib/fatal-error'
 import { TabBar } from '../tab-bar'
 
 import { Row } from '../lib/row'
-import { Octicon } from '../octicons'
+import { Select } from '../lib/select'
+import { Octicon, syncClockwise } from '../octicons'
 import * as octicons from '../octicons/octicons.generated'
 import { Button } from '../lib/button'
 
@@ -24,7 +27,7 @@ import { BranchList } from './branch-list'
 import { PullRequestList } from './pull-request-list'
 import { IssueList } from './issue-list'
 import { IssuesStore } from '../../lib/stores/issues-store'
-import { IBranchListItem } from './group-branches'
+import { filterBranchesByRemote, IBranchListItem } from './group-branches'
 import { BranchSortOrder } from '../../models/branch-sort-order'
 import {
   getDefaultAriaLabelForBranch,
@@ -42,6 +45,10 @@ import {
 import { PullRequestQuickView } from '../pull-request-quick-view'
 import { Emoji } from '../../lib/emoji'
 import classNames from 'classnames'
+import { asHost, parseRemote } from '../../lib/remote-parsing'
+
+const AllRemotesValue = '__all_remotes__'
+const RemoteSelectionStoragePrefix = 'branches-selected-remote:'
 
 interface IBranchesContainerProps {
   readonly dispatcher: Dispatcher
@@ -93,6 +100,10 @@ interface IBranchesContainerState {
     pr: PullRequest
     prListItemTop: number
   } | null
+  readonly remotes: ReadonlyArray<IRemote>
+  readonly selectedRemoteName: string | null
+  readonly loadingRemotes: boolean
+  readonly remoteOperation: 'fetch' | 'pull' | 'push' | null
 }
 
 /** The unified Branches and Pull Requests component. */
@@ -115,6 +126,7 @@ export class BranchesContainer extends React.Component<
   }
 
   private pullRequestQuickViewTimerId: number | null = null
+  private unmounted = false
 
   public constructor(props: IBranchesContainerProps) {
     super(props)
@@ -125,10 +137,32 @@ export class BranchesContainer extends React.Component<
       currentPullRequest: props.currentPullRequest,
       branchFilterText: '',
       pullRequestBeingViewed: null,
+      remotes: [],
+      selectedRemoteName: null,
+      loadingRemotes: true,
+      remoteOperation: null,
+    }
+  }
+
+  public componentDidMount() {
+    this.unmounted = false
+    this.loadRemotes()
+  }
+
+  public componentDidUpdate(prevProps: IBranchesContainerProps) {
+    if (prevProps.repository.path !== this.props.repository.path) {
+      this.setState({
+        remotes: [],
+        selectedRemoteName: null,
+        loadingRemotes: true,
+        remoteOperation: null,
+      })
+      this.loadRemotes()
     }
   }
 
   public componentWillUnmount = () => {
+    this.unmounted = true
     this.clearPullRequestQuickViewTimer()
   }
 
@@ -144,6 +178,345 @@ export class BranchesContainer extends React.Component<
         {this.renderPullRequestQuickView()}
       </div>
     )
+  }
+
+  private get remoteSelectionStorageKey() {
+    return `${RemoteSelectionStoragePrefix}${this.props.repository.path}`
+  }
+
+  private resolveSelectedRemoteName(remotes: ReadonlyArray<IRemote>) {
+    if (remotes.length < 2) {
+      return null
+    }
+
+    const stored = localStorage.getItem(this.remoteSelectionStorageKey)
+    if (stored === AllRemotesValue) {
+      return null
+    }
+
+    if (stored !== null && remotes.some(remote => remote.name === stored)) {
+      return stored
+    }
+
+    const trackingRemoteName = this.props.currentBranch?.upstreamRemoteName
+    if (
+      trackingRemoteName !== null &&
+      trackingRemoteName !== undefined &&
+      remotes.some(remote => remote.name === trackingRemoteName)
+    ) {
+      return trackingRemoteName
+    }
+
+    if (remotes.some(remote => remote.name === 'origin')) {
+      return 'origin'
+    }
+
+    return remotes[0]?.name ?? null
+  }
+
+  private loadRemotes = async () => {
+    const repositoryPath = this.props.repository.path
+
+    try {
+      const remotes = await this.props.dispatcher.getRemotes(
+        this.props.repository
+      )
+
+      if (this.unmounted || repositoryPath !== this.props.repository.path) {
+        return
+      }
+
+      this.setState({
+        remotes,
+        selectedRemoteName: this.resolveSelectedRemoteName(remotes),
+        loadingRemotes: false,
+      })
+    } catch (error) {
+      if (!this.unmounted) {
+        this.setState({
+          remotes: [],
+          selectedRemoteName: null,
+          loadingRemotes: false,
+        })
+      }
+      await this.props.dispatcher.postError(error)
+    }
+  }
+
+  private get selectedRemote(): IRemote | null {
+    const selectedRemoteName = this.state.selectedRemoteName
+    if (selectedRemoteName === null) {
+      return null
+    }
+
+    return (
+      this.state.remotes.find(remote => remote.name === selectedRemoteName) ??
+      null
+    )
+  }
+
+  private get visibleBranches() {
+    return filterBranchesByRemote(
+      this.props.allBranches,
+      this.state.selectedRemoteName
+    )
+  }
+
+  private get visibleRecentBranches() {
+    if (this.state.selectedRemoteName === null) {
+      return this.props.recentBranches
+    }
+
+    const visibleRefs = new Set(this.visibleBranches.map(branch => branch.ref))
+    return this.props.recentBranches.filter(branch =>
+      visibleRefs.has(branch.ref)
+    )
+  }
+
+  private get visibleDefaultBranch() {
+    const defaultBranch = this.props.defaultBranch
+    const selectedRemoteName = this.state.selectedRemoteName
+
+    if (
+      defaultBranch === null ||
+      selectedRemoteName === null ||
+      defaultBranch.remoteName === null ||
+      defaultBranch.remoteName === selectedRemoteName
+    ) {
+      return defaultBranch
+    }
+
+    return (
+      this.visibleBranches.find(
+        branch =>
+          branch.nameWithoutRemote === defaultBranch.nameWithoutRemote &&
+          (branch.remoteName === null ||
+            branch.remoteName === selectedRemoteName)
+      ) ?? null
+    )
+  }
+
+  private getRemoteHost(remote: IRemote) {
+    const parsed = parseRemote(remote.url)
+    return parsed === null ? 'Custom remote' : asHost(parsed)
+  }
+
+  private getRemoteBranchCount(remoteName: string) {
+    return this.props.allBranches.filter(
+      branch =>
+        !branch.isDesktopForkRemoteBranch && branch.remoteName === remoteName
+    ).length
+  }
+
+  private remoteHasCurrentBranch(remote: IRemote) {
+    const branchName = this.props.currentBranch?.nameWithoutRemote
+    if (branchName === undefined) {
+      return false
+    }
+
+    return this.props.allBranches.some(
+      branch =>
+        branch.remoteName === remote.name &&
+        branch.nameWithoutRemote === branchName
+    )
+  }
+
+  private renderRemoteSwitcher = () => {
+    if (this.state.loadingRemotes || this.state.remotes.length < 2) {
+      return null
+    }
+
+    const selectedRemote = this.selectedRemote
+    const selectedRemoteName = this.state.selectedRemoteName
+    const currentBranchName = this.props.currentBranch?.nameWithoutRemote
+    const isBusy = this.state.remoteOperation !== null
+    const hasRemoteBranch =
+      selectedRemote !== null && this.remoteHasCurrentBranch(selectedRemote)
+    const fetchLabel =
+      selectedRemote === null ? 'Fetch all' : `Fetch ${selectedRemote.name}`
+
+    return (
+      <div className="remote-switcher">
+        <div className="remote-switcher-row">
+          <Octicon className="remote-switcher-icon" symbol={octicons.server} />
+          <Select
+            label="Remote"
+            className="remote-switcher-select"
+            value={selectedRemoteName ?? AllRemotesValue}
+            onChange={this.onRemoteSelectionChanged}
+            disabled={isBusy}
+          >
+            <option value={AllRemotesValue}>All remotes</option>
+            {this.state.remotes.map(remote => (
+              <option value={remote.name} key={remote.name}>
+                {remote.name} — {this.getRemoteHost(remote)}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div className="remote-switcher-meta">
+          <span className="remote-switcher-description">
+            {selectedRemote === null
+              ? `${this.state.remotes.length} remotes`
+              : currentBranchName === undefined
+              ? `${this.getRemoteBranchCount(
+                  selectedRemote.name
+                )} remote branches · ${this.getRemoteHost(selectedRemote)}`
+              : hasRemoteBranch
+              ? `${currentBranchName} ↔ ${selectedRemote.name}/${currentBranchName}`
+              : `${currentBranchName} → new ${selectedRemote.name}/${currentBranchName}`}
+          </span>
+
+          <div className="remote-switcher-actions">
+            <Button
+              className="remote-action-button button-with-icon"
+              onClick={this.onFetchSelectedRemote}
+              disabled={isBusy}
+              tooltip={fetchLabel}
+            >
+              <Octicon
+                symbol={syncClockwise}
+                className={classNames('mr', {
+                  spin: this.state.remoteOperation === 'fetch',
+                })}
+              />
+              Fetch
+            </Button>
+
+            {selectedRemote !== null && (
+              <>
+                <Button
+                  className="remote-action-button"
+                  onClick={this.onPullSelectedRemote}
+                  disabled={
+                    isBusy ||
+                    currentBranchName === undefined ||
+                    !hasRemoteBranch
+                  }
+                  tooltip={
+                    hasRemoteBranch && currentBranchName !== undefined
+                      ? `Pull ${selectedRemote.name}/${currentBranchName} into ${currentBranchName}`
+                      : `${selectedRemote.name} has no ${
+                          currentBranchName ?? 'current'
+                        } branch to pull`
+                  }
+                >
+                  Pull
+                </Button>
+                <Button
+                  className="remote-action-button"
+                  onClick={this.onPushSelectedRemote}
+                  disabled={isBusy || currentBranchName === undefined}
+                  tooltip={
+                    currentBranchName === undefined
+                      ? 'Check out a local branch before pushing'
+                      : `Push ${currentBranchName} to ${selectedRemote.name}/${currentBranchName} without changing upstream`
+                  }
+                >
+                  Push
+                </Button>
+              </>
+            )}
+
+            <Button
+              className="remote-manage-button"
+              onClick={this.onManageRemotes}
+              disabled={isBusy}
+              tooltip="Manage remotes"
+              ariaLabel="Manage remotes"
+            >
+              <Octicon symbol={octicons.gear} />
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  private onRemoteSelectionChanged = (
+    event: React.FormEvent<HTMLSelectElement>
+  ) => {
+    const value = event.currentTarget.value
+    const selectedRemoteName = value === AllRemotesValue ? null : value
+
+    localStorage.setItem(
+      this.remoteSelectionStorageKey,
+      selectedRemoteName ?? AllRemotesValue
+    )
+
+    this.setState({
+      selectedRemoteName,
+      selectedBranch: this.props.currentBranch,
+    })
+  }
+
+  private runRemoteOperation = async (
+    operation: 'fetch' | 'pull' | 'push',
+    action: () => Promise<void>
+  ) => {
+    this.setState({ remoteOperation: operation })
+
+    try {
+      await action()
+    } catch (error) {
+      await this.props.dispatcher.postError(error)
+    } finally {
+      if (!this.unmounted) {
+        this.setState({ remoteOperation: null })
+      }
+    }
+  }
+
+  private onFetchSelectedRemote = () => {
+    return this.runRemoteOperation('fetch', async () => {
+      const selectedRemote = this.selectedRemote
+      if (selectedRemote === null) {
+        await this.props.dispatcher.fetch(
+          this.props.repository,
+          FetchType.UserInitiatedTask
+        )
+      } else {
+        await this.props.dispatcher.fetchRemote(
+          this.props.repository,
+          selectedRemote,
+          FetchType.UserInitiatedTask
+        )
+      }
+    })
+  }
+
+  private onPullSelectedRemote = () => {
+    const selectedRemote = this.selectedRemote
+    if (selectedRemote === null) {
+      return
+    }
+
+    return this.runRemoteOperation('pull', () =>
+      this.props.dispatcher.pullFromRemote(
+        this.props.repository,
+        selectedRemote
+      )
+    )
+  }
+
+  private onPushSelectedRemote = () => {
+    const selectedRemote = this.selectedRemote
+    if (selectedRemote === null) {
+      return
+    }
+
+    return this.runRemoteOperation('push', () =>
+      this.props.dispatcher.pushToRemote(this.props.repository, selectedRemote)
+    )
+  }
+
+  private onManageRemotes = () => {
+    this.props.dispatcher.closeFoldout(FoldoutType.Branch)
+    this.props.dispatcher.showPopup({
+      type: PopupType.ManageRemotes,
+      repository: this.props.repository,
+    })
   }
 
   private renderPullRequestQuickView = (): JSX.Element | null => {
@@ -290,38 +663,43 @@ export class BranchesContainer extends React.Component<
     switch (tab) {
       case BranchesTab.Branches:
         return (
-          <BranchList
-            repository={this.props.repository}
-            defaultBranch={this.props.defaultBranch}
-            currentBranch={this.props.currentBranch}
-            allBranches={this.props.allBranches}
-            recentBranches={this.props.recentBranches}
-            branchSortOrder={this.props.branchSortOrder}
-            onItemClick={this.onBranchItemClick}
-            filterText={this.state.branchFilterText}
-            onFilterTextChanged={this.onBranchFilterTextChanged}
-            selectedBranch={this.state.selectedBranch}
-            onSelectionChanged={this.onBranchSelectionChanged}
-            canCreateNewBranch={true}
-            onCreateNewBranch={this.onCreateBranchWithName}
-            renderBranch={this.renderBranch}
-            getBranchAriaLabel={this.getBranchAriaLabel}
-            hideFilterRow={dragAndDropManager.isDragOfTypeInProgress(
-              DragType.Commit
-            )}
-            renderPreList={this.renderPreList}
-            onRenameBranch={this.props.onRenameBranch}
-            onSetAsDefaultBranch={this.props.onSetAsDefaultBranch}
-            onDuplicateBranch={this.onDuplicateBranch}
-            onDeleteBranch={this.props.onDeleteBranch}
-            onDeleteUnusedLocalBranches={this.props.onDeleteUnusedLocalBranches}
-            onPullSingleBranch={this.props.onPullSingleBranch}
-            onCheckoutInNewWorktree={
-              enableWorktreeSupport()
-                ? this.props.onCheckoutInNewWorktree
-                : undefined
-            }
-          />
+          <div className="branches-tab-content">
+            {this.renderRemoteSwitcher()}
+            <BranchList
+              repository={this.props.repository}
+              defaultBranch={this.visibleDefaultBranch}
+              currentBranch={this.props.currentBranch}
+              allBranches={this.visibleBranches}
+              recentBranches={this.visibleRecentBranches}
+              branchSortOrder={this.props.branchSortOrder}
+              onItemClick={this.onBranchItemClick}
+              filterText={this.state.branchFilterText}
+              onFilterTextChanged={this.onBranchFilterTextChanged}
+              selectedBranch={this.state.selectedBranch}
+              onSelectionChanged={this.onBranchSelectionChanged}
+              canCreateNewBranch={true}
+              onCreateNewBranch={this.onCreateBranchWithName}
+              renderBranch={this.renderBranch}
+              getBranchAriaLabel={this.getBranchAriaLabel}
+              hideFilterRow={dragAndDropManager.isDragOfTypeInProgress(
+                DragType.Commit
+              )}
+              renderPreList={this.renderPreList}
+              onRenameBranch={this.props.onRenameBranch}
+              onSetAsDefaultBranch={this.props.onSetAsDefaultBranch}
+              onDuplicateBranch={this.onDuplicateBranch}
+              onDeleteBranch={this.props.onDeleteBranch}
+              onDeleteUnusedLocalBranches={
+                this.props.onDeleteUnusedLocalBranches
+              }
+              onPullSingleBranch={this.props.onPullSingleBranch}
+              onCheckoutInNewWorktree={
+                enableWorktreeSupport()
+                  ? this.props.onCheckoutInNewWorktree
+                  : undefined
+              }
+            />
+          </div>
         )
       case BranchesTab.PullRequests: {
         return this.renderPullRequests()

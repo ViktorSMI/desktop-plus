@@ -397,7 +397,9 @@ export class BranchesContainer extends React.Component<
                   tooltip={
                     hasRemoteBranch && currentBranchName !== undefined
                       ? `Pull ${selectedRemote.name}/${currentBranchName} into ${currentBranchName}`
-                      : `${selectedRemote.name} has no ${currentBranchName ?? 'current'} branch to pull`
+                      : `${selectedRemote.name} has no ${
+                          currentBranchName ?? 'current'
+                        } branch to pull`
                   }
                 >
                   Pull
@@ -505,10 +507,7 @@ export class BranchesContainer extends React.Component<
     }
 
     return this.runRemoteOperation('push', () =>
-      this.props.dispatcher.pushToRemote(
-        this.props.repository,
-        selectedRemote
-      )
+      this.props.dispatcher.pushToRemote(this.props.repository, selectedRemote)
     )
   }
 

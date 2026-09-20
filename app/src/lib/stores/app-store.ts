@@ -6355,8 +6355,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
       // I'm also adding a non fatal exception if this ever happens
       // so that we can confidently remove this safeguard in a future
       // release.
-      const safeRemote: IRemote =
-        remoteOverride ?? { name: remoteName, url: remote.url }
+      const safeRemote: IRemote = remoteOverride ?? {
+        name: remoteName,
+        url: remote.url,
+      }
 
       if (remoteOverride === undefined && safeRemote.name !== remote.name) {
         sendNonFatalException(
@@ -6366,73 +6368,70 @@ export class AppStore extends TypedBaseStore<IAppState> {
       }
 
       const gitStore = this.gitStoreCache.get(repository)
-      await gitStore.performFailableOperation(
-        async () => {
-          let aborted = false
-          await pushRepo(
-            repository,
-            safeRemote,
-            branch.name,
-            remoteOverride
-              ? branch.nameWithoutRemote
-              : branch.upstreamWithoutRemote,
-            remoteOverride ? null : gitStore.tagsToPush,
-            {
-              onHookFailure: this.onHookFailure(() => (aborted = true)),
-              ...options,
-            },
-            progress => {
-              this.updatePushPullFetchProgress(repository, {
-                ...progress,
-                title: pushTitle,
-                value: pushWeight * progress.value,
-              })
-            }
-          ).catch(err => (aborted ? undefined : Promise.reject(err)))
-
-          if (aborted) {
-            return
-          }
-
-          if (remoteOverride === undefined) {
-            gitStore.clearTagsToPush()
-          }
-
-          await gitStore.fetchRemotes([safeRemote], false, fetchProgress => {
+      await gitStore.performFailableOperation(async () => {
+        let aborted = false
+        await pushRepo(
+          repository,
+          safeRemote,
+          branch.name,
+          remoteOverride
+            ? branch.nameWithoutRemote
+            : branch.upstreamWithoutRemote,
+          remoteOverride ? null : gitStore.tagsToPush,
+          {
+            onHookFailure: this.onHookFailure(() => (aborted = true)),
+            ...options,
+          },
+          progress => {
             this.updatePushPullFetchProgress(repository, {
-              ...fetchProgress,
-              value: pushWeight + fetchProgress.value * fetchWeight,
+              ...progress,
+              title: pushTitle,
+              value: pushWeight * progress.value,
             })
-          })
+          }
+        ).catch(err => (aborted ? undefined : Promise.reject(err)))
 
-          const refreshTitle = __DARWIN__
-            ? 'Refreshing Repository'
-            : 'Refreshing repository'
-          const refreshStartProgress = pushWeight + fetchWeight
+        if (aborted) {
+          return
+        }
 
+        if (remoteOverride === undefined) {
+          gitStore.clearTagsToPush()
+        }
+
+        await gitStore.fetchRemotes([safeRemote], false, fetchProgress => {
           this.updatePushPullFetchProgress(repository, {
-            kind: 'generic',
-            title: refreshTitle,
-            description: 'Fast-forwarding branches',
-            value: refreshStartProgress,
+            ...fetchProgress,
+            value: pushWeight + fetchProgress.value * fetchWeight,
           })
+        })
 
-          await this.fastForwardBranches(repository)
+        const refreshTitle = __DARWIN__
+          ? 'Refreshing Repository'
+          : 'Refreshing repository'
+        const refreshStartProgress = pushWeight + fetchWeight
 
-          this.updatePushPullFetchProgress(repository, {
-            kind: 'generic',
-            title: refreshTitle,
-            value: refreshStartProgress + refreshWeight * 0.5,
-          })
+        this.updatePushPullFetchProgress(repository, {
+          kind: 'generic',
+          title: refreshTitle,
+          description: 'Fast-forwarding branches',
+          value: refreshStartProgress,
+        })
 
-          // manually refresh branch protections after the push, to ensure
-          // any new branch will immediately report as protected
-          await this.refreshBranchProtectionState(repository)
+        await this.fastForwardBranches(repository)
 
-          await this._refreshRepository(repository)
-        },
-        failableOptions
-      )
+        this.updatePushPullFetchProgress(repository, {
+          kind: 'generic',
+          title: refreshTitle,
+          value: refreshStartProgress + refreshWeight * 0.5,
+        })
+
+        // manually refresh branch protections after the push, to ensure
+        // any new branch will immediately report as protected
+        await this.refreshBranchProtectionState(repository)
+
+        await this._refreshRepository(repository)
+      }, failableOptions)
 
       this.updatePushPullFetchProgress(repository, null)
 
@@ -6764,35 +6763,32 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
           let aborted = false
           const pullSucceeded = await gitStore
-            .performFailableOperation(
-              async () => {
-                await pullRepo(repository, remote, {
-                  progressCallback: progress => {
-                    this.updatePushPullFetchProgress(repository, {
-                      ...progress,
-                      value: progress.value * pullWeight,
+            .performFailableOperation(async () => {
+              await pullRepo(repository, remote, {
+                progressCallback: progress => {
+                  this.updatePushPullFetchProgress(repository, {
+                    ...progress,
+                    value: progress.value * pullWeight,
+                  })
+                },
+                remoteBranch: remoteBranchOverride,
+                onHookFailure: (hookName, terminalOutput) =>
+                  new Promise(resolve => {
+                    this._showPopup({
+                      type: PopupType.HookFailed,
+                      hookName,
+                      terminalOutput,
+                      resolve: resolution => {
+                        if (resolution === 'abort') {
+                          aborted = true
+                        }
+                        resolve(resolution)
+                      },
                     })
-                  },
-                  remoteBranch: remoteBranchOverride,
-                  onHookFailure: (hookName, terminalOutput) =>
-                    new Promise(resolve => {
-                      this._showPopup({
-                        type: PopupType.HookFailed,
-                        hookName,
-                        terminalOutput,
-                        resolve: resolution => {
-                          if (resolution === 'abort') {
-                            aborted = true
-                          }
-                          resolve(resolution)
-                        },
-                      })
-                    }),
-                })
-                return true
-              },
-              failableOptions
-            )
+                  }),
+              })
+              return true
+            }, failableOptions)
             .catch(err => (aborted ? false : Promise.reject(err)))
 
           // If the pull failed we shouldn't try to update the remote HEAD

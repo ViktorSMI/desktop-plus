@@ -839,10 +839,7 @@ export class Dispatcher {
   }
 
   /** Push the current branch to one remote without changing its upstream. */
-  public pushToRemote(
-    repository: Repository,
-    remote: IRemote
-  ): Promise<void> {
+  public pushToRemote(repository: Repository, remote: IRemote): Promise<void> {
     return this.appStore._pushToRemote(repository, remote)
   }
 

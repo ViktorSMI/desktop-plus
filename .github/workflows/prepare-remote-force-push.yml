@@ -39,6 +39,14 @@ jobs:
           path.write_bytes(patch)
           subprocess.run(['git', 'apply', '--check', str(path)], check=True)
           subprocess.run(['git', 'apply', str(path)], check=True)
+
+          source = Path('app/src/ui/rebase/confirm-force-push.tsx')
+          text = source.read_text()
+          field = '  private submitted = false\n\n'
+          before = '  public constructor(props: IConfirmForcePushProps) {'
+          assert text.count(field) == 1 and text.count(before) == 1
+          text = text.replace(field, '').replace(before, field + before)
+          source.write_text(text)
       - uses: ./.github/actions/setup-ci-environment
         with:
           node-version: 24.19.0

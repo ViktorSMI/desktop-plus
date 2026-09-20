@@ -270,6 +270,16 @@ export const setWindowSelectedRepository = sendProxy(
   1
 )
 
+/** A newer fork release requires manual installation on this platform. */
+export function onManualForkUpdate(
+  handler: (
+    event: Electron.IpcRendererEvent,
+    update: import('../lib/updates/fork-release').IManualForkUpdate
+  ) => void
+) {
+  ipcRenderer.on('fork-update-manual', handler)
+}
+
 /** Subscribes to auto updater error events originating from the main process */
 export function onAutoUpdaterError(
   errorHandler: (evt: Electron.IpcRendererEvent, error: Error) => void

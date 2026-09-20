@@ -27,6 +27,8 @@ import { installNotificationCallback } from './notifications'
 import { addTrustedIPCSender } from './trusted-ipc-sender'
 import { getUpdaterGUID } from '../lib/get-updater-guid'
 import { CLIAction } from '../lib/cli-action'
+import { getForkUpdater } from './fork-updater'
+import { IManualForkUpdate } from '../lib/updates/fork-release'
 
 export class AppWindow {
   private window: Electron.BrowserWindow
@@ -489,13 +491,31 @@ export class AppWindow {
   }
 
   public setupAutoUpdater() {
+    const updater = __FORK_UPDATES_ENABLED__ ? getForkUpdater() : autoUpdater
+    if (__FORK_UPDATES_ENABLED__) {
+      const onManualUpdate = (update: IManualForkUpdate) => {
+        this.isDownloadingUpdate = false
+        ipcWebContents.send(
+          this.window.webContents,
+          'fork-update-manual',
+          update
+        )
+      }
+      getForkUpdater().on('manual-update-available', onManualUpdate)
+      this.addCleanupTask(() =>
+        getForkUpdater().removeListener(
+          'manual-update-available',
+          onManualUpdate
+        )
+      )
+    }
     const onAutoUpdaterError = (error: Error) => {
       this.isDownloadingUpdate = false
       ipcWebContents.send(this.window.webContents, 'auto-updater-error', error)
     }
-    autoUpdater.on('error', onAutoUpdaterError)
+    updater.on('error', onAutoUpdaterError)
     this.addCleanupTask(() =>
-      autoUpdater.removeListener('error', onAutoUpdaterError)
+      updater.removeListener('error', onAutoUpdaterError)
     )
 
     const onCheckingForUpdate = () => {
@@ -505,9 +525,9 @@ export class AppWindow {
         'auto-updater-checking-for-update'
       )
     }
-    autoUpdater.on('checking-for-update', onCheckingForUpdate)
+    updater.on('checking-for-update', onCheckingForUpdate)
     this.addCleanupTask(() =>
-      autoUpdater.removeListener('checking-for-update', onCheckingForUpdate)
+      updater.removeListener('checking-for-update', onCheckingForUpdate)
     )
 
     const onUpdateAvailable = () => {
@@ -517,9 +537,9 @@ export class AppWindow {
         'auto-updater-update-available'
       )
     }
-    autoUpdater.on('update-available', onUpdateAvailable)
+    updater.on('update-available', onUpdateAvailable)
     this.addCleanupTask(() =>
-      autoUpdater.removeListener('update-available', onUpdateAvailable)
+      updater.removeListener('update-available', onUpdateAvailable)
     )
 
     const onUpdateNotAvailable = () => {
@@ -529,9 +549,9 @@ export class AppWindow {
         'auto-updater-update-not-available'
       )
     }
-    autoUpdater.on('update-not-available', onUpdateNotAvailable)
+    updater.on('update-not-available', onUpdateNotAvailable)
     this.addCleanupTask(() =>
-      autoUpdater.removeListener('update-not-available', onUpdateNotAvailable)
+      updater.removeListener('update-not-available', onUpdateNotAvailable)
     )
 
     const onUpdateDownloaded = () => {
@@ -541,14 +561,25 @@ export class AppWindow {
         'auto-updater-update-downloaded'
       )
     }
-    autoUpdater.on('update-downloaded', onUpdateDownloaded)
+    updater.on('update-downloaded', onUpdateDownloaded)
     this.addCleanupTask(() =>
-      autoUpdater.removeListener('update-downloaded', onUpdateDownloaded)
+      updater.removeListener('update-downloaded', onUpdateDownloaded)
     )
   }
 
   public async checkForUpdates(url: string) {
     try {
+      if (__FORK_UPDATES_ENABLED__) {
+        // Ignore renderer URLs. Only the pinned fork can supply updates.
+        return await getForkUpdater().checkForUpdates()
+      }
+      // Retain the compiled-in local fixture for packaged E2E tests only.
+      if (
+        !__UPDATES_URL__.startsWith('http://127.0.0.1:') ||
+        !url.startsWith(__UPDATES_URL__)
+      ) {
+        return new Error('Automatic updates are disabled for this build.')
+      }
       autoUpdater.setFeedURL({ url: await trySetUpdaterGuid(url) })
       autoUpdater.checkForUpdates()
     } catch (e) {
@@ -558,7 +589,11 @@ export class AppWindow {
   }
 
   public quitAndInstallUpdate() {
-    autoUpdater.quitAndInstall()
+    if (__FORK_UPDATES_ENABLED__) {
+      getForkUpdater().quitAndInstall()
+    } else if (__UPDATES_URL__.startsWith('http://127.0.0.1:')) {
+      autoUpdater.quitAndInstall()
+    }
   }
 
   public minimizeWindow() {

@@ -1,6 +1,7 @@
 import { getSHA } from './git-info'
 import { getUpdatesURL, getChannel } from '../script/dist-info'
 import { version, productName } from './package.json'
+import { ForkRepository } from './src/lib/updates/fork-release'
 
 const devClientId = '3a723b10ac5575cc5bb9'
 const devClientSecret = '22c34d87789a365981ed921352a7b9a8c3f69d54'
@@ -69,6 +70,10 @@ export function getReplacements() {
     __DEV_SECRETS__: isDevBuild || !process.env.DESKTOP_OAUTH_CLIENT_SECRET,
     __RELEASE_CHANNEL__: s(channel),
     __UPDATES_URL__: s(process.env.DESKTOP_E2E_UPDATES_URL ?? getUpdatesURL()),
+    __FORK_UPDATES_ENABLED__:
+      !isDevBuild &&
+      process.env.DESKTOP_FORK_UPDATES === '1' &&
+      process.env.GITHUB_REPOSITORY === ForkRepository,
     __ERROR_REPORTING_ENDPOINT__: optionalStringReplacement(
       process.env.DESKTOP_ERROR_REPORTING_ENDPOINT
     ),

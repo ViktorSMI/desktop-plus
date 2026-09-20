@@ -7,6 +7,7 @@ import {
   isRunningUnderARM64Translation,
   onAutoUpdaterCheckingForUpdate,
   onAutoUpdaterError,
+  onManualForkUpdate,
   onAutoUpdaterUpdateAvailable,
   onAutoUpdaterUpdateDownloaded,
   onAutoUpdaterUpdateNotAvailable,
@@ -24,6 +25,10 @@ import { offsetFromNow } from '../../lib/offset-from'
 import { gte, SemVer } from 'semver'
 import { getVersion } from './app-proxy'
 import { getUserAgent } from '../../lib/http'
+import {
+  ForkReleasesURL,
+  IManualForkUpdate,
+} from '../../lib/updates/fork-release'
 
 /** The last version a showcase was seen. */
 export const lastShowCaseVersionSeen = 'version-of-last-showcase'
@@ -44,9 +49,15 @@ export enum UpdateStatus {
 
   /** We have not checked for an update yet. */
   UpdateNotChecked,
+
+  /** A check failed; this does not mean that the app is up to date. */
+  UpdateError,
+  /** A newer release exists, but this installation cannot self-update. */
+  ManualUpdateAvailable,
 }
 
 export interface IUpdateState {
+  readonly manualUpdate?: IManualForkUpdate
   status: UpdateStatus
   lastSuccessfulCheck: Date | null
   isX64ToARM64ImmediateAutoUpdate: boolean
@@ -58,6 +69,7 @@ export interface IUpdateState {
 /** A store which contains the current state of the auto updater. */
 class UpdateStore {
   private emitter = new Emitter()
+  private manualUpdate: IManualForkUpdate | undefined
   private status = UpdateStatus.UpdateNotChecked
   private lastSuccessfulCheck: Date | null = null
   private newReleases: ReadonlyArray<ReleaseSummary> | null = null
@@ -83,11 +95,22 @@ class UpdateStore {
       this.lastSuccessfulCheck = new Date(lastSuccessfulCheckTime)
     }
 
+    onManualForkUpdate(this.onManualForkUpdate)
     onAutoUpdaterError(this.onAutoUpdaterError)
     onAutoUpdaterCheckingForUpdate(this.onCheckingForUpdate)
     onAutoUpdaterUpdateAvailable(this.onUpdateAvailable)
     onAutoUpdaterUpdateNotAvailable(this.onUpdateNotAvailable)
     onAutoUpdaterUpdateDownloaded(this.onUpdateDownloaded)
+  }
+
+  private onManualForkUpdate = (
+    _event: Electron.IpcRendererEvent,
+    update: IManualForkUpdate
+  ) => {
+    this.manualUpdate = update
+    this.touchLastChecked()
+    this.status = UpdateStatus.ManualUpdateAvailable
+    this.emitDidChange()
   }
 
   private touchLastChecked() {
@@ -97,7 +120,8 @@ class UpdateStore {
   }
 
   private onAutoUpdaterError = (e: Electron.IpcRendererEvent, error: Error) => {
-    this.status = UpdateStatus.UpdateNotAvailable
+    this.status = UpdateStatus.UpdateError
+    this.emitDidChange()
 
     if (__WIN32__) {
       const parsedError = parseError(error)
@@ -120,14 +144,18 @@ class UpdateStore {
 
   private onUpdateNotAvailable = async () => {
     // This is so we can check for pretext changelog for showcasing a recent update
-    this.newReleases = await generateReleaseSummary()
+    this.newReleases = __FORK_UPDATES_ENABLED__
+      ? null
+      : await generateReleaseSummary()
     this.touchLastChecked()
     this.status = UpdateStatus.UpdateNotAvailable
     this.emitDidChange()
   }
 
   private onUpdateDownloaded = async () => {
-    this.newReleases = await generateReleaseSummary()
+    this.newReleases = __FORK_UPDATES_ENABLED__
+      ? null
+      : await generateReleaseSummary()
     // We know it's an "immediate" auto-update from x64 to arm64 if the app is
     // running on arm64 under x64 emulation and there is only one new release
     // and it's the same version we have right now (which means we spoofed
@@ -152,7 +180,7 @@ class UpdateStore {
   private supportsImmediateUpdateFromEmulatedX64ToARM64(): boolean {
     // Because of how Squirrel.Windows works, this is only available for macOS.
     // See: https://github.com/desktop/desktop/pull/14998
-    return __DARWIN__
+    return !__FORK_UPDATES_ENABLED__ && __DARWIN__
   }
 
   /** Register a function to call when the auto updater state changes. */
@@ -180,6 +208,7 @@ class UpdateStore {
   public get state(): IUpdateState {
     return {
       status: this.status,
+      manualUpdate: this.manualUpdate,
       lastSuccessfulCheck: this.lastSuccessfulCheck,
       newReleases: this.newReleases,
       isX64ToARM64ImmediateAutoUpdate: this.isX64ToARM64ImmediateAutoUpdate,
@@ -208,6 +237,16 @@ class UpdateStore {
       return
     }
 
+    if (
+      this.status === UpdateStatus.CheckingForUpdates ||
+      this.status === UpdateStatus.UpdateAvailable
+    ) {
+      return
+    }
+    this.userInitiatedUpdate = !inBackground
+    this.manualUpdate = undefined
+    this.status = UpdateStatus.CheckingForUpdates
+    this.emitDidChange()
     const updatesUrl = await this.getUpdatesUrl(skipGuidCheck)
 
     if (updatesUrl === null) {
@@ -219,11 +258,17 @@ class UpdateStore {
     const error = await checkForUpdates(updatesUrl)
 
     if (error !== undefined) {
+      this.status = UpdateStatus.UpdateError
+      this.emitDidChange()
       this.emitError(error)
     }
   }
 
   private async getUpdatesUrl(skipGuidCheck: boolean) {
+    if (__FORK_UPDATES_ENABLED__) {
+      // A marker only: the main process resolves the pinned GitHub release.
+      return ForkReleasesURL
+    }
     let url = null
 
     try {
@@ -263,6 +308,9 @@ class UpdateStore {
 
   /** Quit and install the update. */
   public quitAndInstallUpdate() {
+    if (this.status !== UpdateStatus.UpdateReady) {
+      return
+    }
     // This is synchronous so that we can ensure the app will let itself be quit
     // before we call the function to quit.
     // eslint-disable-next-line no-sync
@@ -271,6 +319,9 @@ class UpdateStore {
   }
 
   private async updatePriorityUpdateStatus() {
+    if (__FORK_UPDATES_ENABLED__) {
+      return
+    }
     try {
       const response = await fetch(await this.getUpdatesUrl(false), {
         method: 'HEAD',
@@ -303,6 +354,9 @@ class UpdateStore {
    * was published in the last 15 days.
    */
   public async isUpdateShowcase() {
+    if (__FORK_UPDATES_ENABLED__) {
+      return false
+    }
     if (
       (__RELEASE_CHANNEL__ === 'development' ||
         __RELEASE_CHANNEL__ === 'test') &&
@@ -311,7 +365,9 @@ class UpdateStore {
     ) {
       // On prod or with test manual check for updates, we are doing this during
       // the automatic check for updates
-      this.newReleases = await generateReleaseSummary()
+      this.newReleases = __FORK_UPDATES_ENABLED__
+        ? null
+        : await generateReleaseSummary()
     }
 
     if (this.newReleases === null) {

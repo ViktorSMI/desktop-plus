@@ -1,0 +1,57 @@
+name: Fork updater checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-updater-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Verify update policy and enabled build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DESKTOP_FORK_UPDATES: '1'
+      APP_VERSION: 3.6.7-beta1
+      RELEASE_CHANNEL: ''
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: 24.19.0
+          arch: x64
+      - run: yarn lint
+      - run: yarn validate-changelog
+      - run: yarn compile:prod
+      - run: node script/test.mjs app/test/unit/fork-updater-test.ts
+      - run: python script/create-update-manifest-test.py
+      - run: git diff --exit-code
+
+  windows:
+    name: Installed Windows beta9 to beta10 update
+    needs: validate
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: 24.19.0
+          arch: x64
+      - name: Install, verify, apply and restart the test app
+        run: node script/check-windows-auto-update.mjs

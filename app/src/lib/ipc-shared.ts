@@ -78,6 +78,9 @@ export type RequestChannels = {
   'maximize-window': () => void
   'unmaximize-window': () => void
   'close-window': () => void
+  'fork-update-manual': (
+    update: import('./updates/fork-release').IManualForkUpdate
+  ) => void
   'auto-updater-error': (error: Error) => void
   'auto-updater-checking-for-update': () => void
   'auto-updater-update-available': () => void

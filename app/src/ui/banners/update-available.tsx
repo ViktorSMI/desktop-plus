@@ -70,6 +70,19 @@ export class UpdateAvailable extends React.Component<IUpdateAvailableProps> {
   }
 
   private renderMessage = () => {
+    const manualUpdate = updateStore.state.manualUpdate
+    if (
+      updateStore.state.status === UpdateStatus.ManualUpdateAvailable &&
+      manualUpdate !== undefined
+    ) {
+      return (
+        <span>
+          Desktop Plus {manualUpdate.version} is available.{' '}
+          {manualUpdate.reason}{' '}
+          <LinkButton uri={manualUpdate.url}>Open release</LinkButton>.
+        </span>
+      )
+    }
     if (this.props.isX64ToARM64ImmediateAutoUpdate) {
       return (
         <span onSubmit={this.updateNow}>

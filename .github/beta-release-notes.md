@@ -1,23 +1,21 @@
-## Multi-remote workflow
+## Automatic updates for this fork
 
-- Added a remote selector to the Branches tab for repositories with multiple remotes.
-- Switch between GitHub, Gitea, upstream/origin, or any other configured Git remote.
-- Fetch only the selected remote, or fetch all remotes.
-- Pull the current branch from the same-named branch on the selected remote.
-- Push the current branch to the same-named branch on the selected remote.
-- Switching remotes does not rewrite the branch's configured Git upstream.
-- Pull is disabled when the selected remote does not have the current branch; Push can create it there.
-- Local branches remain visible while remote-tracking branches are filtered to the selected remote.
-- The selected remote is remembered per local repository.
-- Existing Manage Remotes remains available from the selector.
+Windows installations now check only the releases of `ViktorSMI/desktop-plus`. Newer compatible releases are downloaded in the background, verified, and staged with the native Squirrel updater. The application does not restart in the middle of your work: restart normally or choose **Restart to update** when it is ready.
 
-The normal toolbar Push/Pull behavior is unchanged and continues to follow the branch's configured upstream. The new controls in the Branches tab are the explicit multi-remote workflow.
+The first check runs about one minute after launch, then every four hours. **Help > About > Check for updates** starts a manual check. Beta versions are compared numerically, including beta9 to beta10; stable installations do not silently switch to beta releases.
 
-## Included from previous betas
+### One-time installation required
 
-- Read-only issue browsing with responsive in-app issue details and comments.
-- HxD/WinMerge-style binary diff improvements.
+Earlier betas have updating disabled in their client code. Install this release manually once. Later updater-enabled releases can then arrive automatically. The version moves to `3.6.7-beta1` to bootstrap the new Windows package version ordering without downgrading an older beta6 installation.
 
-## Beta build
+Windows updates preserve the existing application identity and user data. This release does not switch CPU architecture, change Git remotes, or modify repository contents during update checks.
 
-This is a prerelease. Windows code signing is disabled for these builds. Platform trust warnings may appear when installing an unsigned build.
+### Other platforms
+
+Our macOS builds are ad-hoc signed and do not support native automatic replacement until Developer ID signing is configured. macOS and Linux users receive a new-release notice with a link to this fork's release page. Linux packages should be updated through the package manager when applicable.
+
+### Verification and release assets
+
+Windows full update packages (`.nupkg`) and `desktop-plus-updates.json` are included alongside installers. The updater validates the repository, version, architecture, exact size, and SHA-256 before Squirrel sees a package. HTTPS and the pinned GitHub repository are the trust root; these checksums are not a separate publisher signature. Windows code signing is still disabled, so platform trust warnings may appear.
+
+Multi-remote Fetch/Pull/Push, responsive read-only Issues, and binary hex diffs from previous betas remain included. Screenshots stay in Actions artifacts only, not in release downloads.

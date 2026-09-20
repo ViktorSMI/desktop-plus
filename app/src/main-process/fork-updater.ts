@@ -1,4 +1,4 @@
-import { app, autoUpdater, net } from 'electron'
+import { app, autoUpdater } from 'electron'
 import { stat } from 'fs/promises'
 import { join, resolve } from 'path'
 import { ForkUpdater } from '../lib/updates/fork-updater'
@@ -62,7 +62,8 @@ export function getForkUpdater(): ForkUpdater {
       currentVersion: __APP_VERSION__,
       arch: process.arch,
       cacheDirectory: join(app.getPath('userData'), 'fork-updates'),
-      fetch: (url, options) => net.fetch(url, options),
+      // Node fetch exposes manual redirects so each CDN hop can be validated.
+      fetch: (url, options) => globalThis.fetch(url, options),
       manualReason,
       apply: applyWindowsUpdate,
       quitAndInstall: () => autoUpdater.quitAndInstall(),

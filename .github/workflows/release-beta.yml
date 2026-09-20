@@ -170,7 +170,7 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish beta with installers and screenshots
+    name: Publish beta installers
     needs: [prepare, screenshots, build]
     runs-on: ubuntu-latest
     permissions:
@@ -192,35 +192,16 @@ jobs:
           merge-multiple: true
           path: release-assets
 
-      - name: Download UI screenshots from this run
-        uses: actions/download-artifact@v8
-        with:
-          name: issue-reader-layout
-          path: ui-proof
-
-      - name: Package gallery and generate checksums
+      - name: Generate checksums
         shell: python
         run: |
           import hashlib
-          import shutil
-          import zipfile
           from pathlib import Path
 
           assets = Path('release-assets')
-          proof = Path('ui-proof')
-          for expected in ('index.html', '1024x600.png', 'last-comment.png'):
-              if not (proof / expected).is_file():
-                  raise SystemExit('Missing UI proof: ' + expected)
           for platform in ('macos', 'windows', 'linux'):
               if not any(platform in p.name.lower() for p in assets.iterdir()):
                   raise SystemExit('Missing installers for ' + platform)
-          with zipfile.ZipFile(assets / 'issue-reader-screenshots.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
-              for file in sorted(proof.iterdir()):
-                  if file.is_file():
-                      archive.write(file, file.name)
-          for image in proof.glob('*.png'):
-              if image.name != 'final-state.png':
-                  shutil.copy2(image, assets / image.name)
           sums = []
           for file in sorted(assets.iterdir()):
               if file.is_file():
@@ -238,12 +219,6 @@ jobs:
             echo "Source commit: $GITHUB_SHA"
             echo
             echo "Build and test results: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-            echo
-            echo '### Issue discussion at 1024 x 600'
-            echo "![Issue discussion]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/1024x600.png)"
-            echo
-            echo '### Last comment reached by the scroll test'
-            echo "![Last comment]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/last-comment.png)"
           } >> /tmp/release-notes.md
           gh release create "$TAG" release-assets/* \
             --target "$GITHUB_SHA" \

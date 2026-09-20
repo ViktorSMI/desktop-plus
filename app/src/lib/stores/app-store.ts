@@ -7177,7 +7177,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
    * Note that this method will not perform the fetch of the specified remote
    * if _any_ fetches or pulls are currently in-progress.
    */
-  private _fetchRemote(
+  public _fetchRemote(
     repository: Repository,
     remote: IRemote,
     fetchType: FetchType

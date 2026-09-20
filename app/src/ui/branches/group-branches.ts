@@ -18,6 +18,25 @@ export function isLocalOnlyBranch(branch: Branch): boolean {
   return branch.type === BranchType.Local && (!branch.upstream || branch.isGone)
 }
 
+/**
+ * Limit remote-tracking branches to one remote while keeping local branches
+ * visible. This lets the branch picker act like a remote workspace without
+ * hiding the currently checked out/local work.
+ */
+export function filterBranchesByRemote(
+  branches: ReadonlyArray<Branch>,
+  remoteName: string | null
+): ReadonlyArray<Branch> {
+  if (remoteName === null) {
+    return branches
+  }
+
+  return branches.filter(
+    branch =>
+      branch.type === BranchType.Local || branch.remoteName === remoteName
+  )
+}
+
 export function groupBranches(
   defaultBranch: Branch | null,
   currentBranch: Branch | null,

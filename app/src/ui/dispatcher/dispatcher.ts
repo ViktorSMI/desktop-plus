@@ -890,6 +890,15 @@ export class Dispatcher {
     return this.appStore._fetch(repository, fetchType)
   }
 
+  /** Fetch refs from one specific remote. */
+  public fetchRemote(
+    repository: Repository,
+    remote: IRemote,
+    fetchType: FetchType
+  ): Promise<void> {
+    return this.appStore._fetchRemote(repository, remote, fetchType)
+  }
+
   /** Publish the repository to GitHub with the given properties. */
   public publishRepository(
     repository: Repository,

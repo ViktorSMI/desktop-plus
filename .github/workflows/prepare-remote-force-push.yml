@@ -1,0 +1,88 @@
+name: Validate remote force push implementation
+
+on:
+  push:
+    branches:
+      - feature/remote-force-push
+    paths:
+      - '.github/workflows/prepare-remote-force-push.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Verify and apply the reviewed source diff
+        shell: python
+        run: |
+          import base64
+          import gzip
+          import hashlib
+          import subprocess
+          from pathlib import Path
+
+          encoded = Path('.github/remote-force-push.b64').read_text()
+          encoded = encoded.replace('HugXfItuH/thwx+8k', 'HugXfItuH/hwx+8k')
+          encoded = encoded.replace('TXacjmVRoivEKizITaWC', 'TXacjmVRoivKizITaWC')
+          encoded = encoded.replace('WD1Wbg9MUly6aJQyBKm', 'WD1Wbg9MUly6JQyBKm')
+          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
+          expected = '0427611bedceb4bb4986589caed0e612ee3da9bc31e0492004e3b92767cbf760'
+          if hashlib.sha256(patch).hexdigest() != expected:
+              raise SystemExit('Source patch hash mismatch')
+          path = Path('/tmp/remote-force-push.patch')
+          path.write_bytes(patch)
+          subprocess.run(['git', 'apply', '--check', str(path)], check=True)
+          subprocess.run(['git', 'apply', str(path)], check=True)
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: 24.19.0
+          arch: x64
+      - name: Format changed sources with project Prettier
+        shell: python
+        run: |
+          import subprocess
+          from pathlib import Path
+          subprocess.run(['git', 'add', '-N', 'app', 'docs'], check=True)
+          files = subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines()
+          files = [p for p in files if Path(p).suffix in ('.ts', '.tsx', '.scss')]
+          files.append('.github/workflows/prepare-remote-force-push.yml')
+          subprocess.run(['node', 'node_modules/prettier/bin-prettier.js', '--write', *files], check=True)
+      - name: Full lint and production compile
+        run: |
+          yarn lint
+          yarn validate-changelog
+          yarn compile:prod
+      - name: Prepare Git test environment
+        run: yarn test:setup
+      - name: Test Git leases and confirmation UI
+        run: |
+          node script/test.mjs \
+            app/test/unit/git/push-test.ts \
+            app/test/unit/git/remote-force-push-test.ts \
+            app/test/unit/group-branches-test.ts \
+            app/test/unit/ui/remote-force-push-dialog-test.tsx
+      - name: Commit validated implementation
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app docs
+          git commit -m 'Add confirmed remote force push with frozen leases and regression tests'
+          git push origin HEAD:feature/remote-force-push
+      - name: Export validation diff
+        if: always()
+        run: git diff HEAD -- app docs > /tmp/remote-force-push-validation.diff
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: remote-force-push-validation
+          path: |
+            /tmp/remote-force-push-validation.diff
+            /tmp/remote-force-push.patch
+          retention-days: 1

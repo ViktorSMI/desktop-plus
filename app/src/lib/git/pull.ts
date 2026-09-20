@@ -38,6 +38,8 @@ export async function pull(
     ) => Promise<'abort' | 'ignore'>
     onTerminalOutputAvailable?: TerminalOutputCallback
     noVerify?: boolean
+    /** Explicit remote branch to merge, without changing branch upstream. */
+    remoteBranch?: string
   }
 ): Promise<void> {
   let opts: IGitStringExecutionOptions = {
@@ -101,6 +103,7 @@ export async function pull(
     ...(options?.progressCallback ? ['--progress'] : []),
     ...(options?.noVerify ? ['--no-verify'] : []),
     remote.name,
+    ...(options?.remoteBranch ? [options.remoteBranch] : []),
   ]
 
   await git(args, repository.path, 'pull', opts)

@@ -10,6 +10,7 @@ import {
   cloneRepository,
   makeCommit,
 } from '../../../helpers/repository-scaffolding'
+import { createTempDirectory } from '../../../helpers/temp'
 
 async function setupRepositoryWithSubmodule(
   t: TestContext
@@ -53,6 +54,46 @@ async function setupRepositoryWithSubmodule(
 }
 
 describe('git/pull', () => {
+  it('can pull an explicit branch from a secondary remote without changing upstream', async t => {
+    const repo = await setupEmptyRepository(t)
+    await makeCommit(repo, {
+      entries: [{ path: 'README.md', contents: 'initial' }],
+      commitMessage: 'initial commit',
+    })
+
+    const originPath = await createTempDirectory(t)
+    const mirrorPath = await createTempDirectory(t)
+    await exec(['clone', '--bare', repo.path, originPath], repo.path)
+    await exec(['clone', '--bare', repo.path, mirrorPath], repo.path)
+    await exec(['remote', 'add', 'origin', originPath], repo.path)
+    await exec(['remote', 'add', 'mirror', mirrorPath], repo.path)
+    await exec(['fetch', 'origin'], repo.path)
+    await exec(['fetch', 'mirror'], repo.path)
+    await exec(
+      ['branch', '--set-upstream-to=origin/master', 'master'],
+      repo.path
+    )
+
+    await makeCommit(repo, {
+      entries: [{ path: 'mirror.txt', contents: 'secondary remote' }],
+      commitMessage: 'mirror-only commit',
+    })
+    await exec(['push', 'mirror', 'master'], repo.path)
+    await exec(['reset', '--hard', 'origin/master'], repo.path)
+
+    const mirror: IRemote = { name: 'mirror', url: mirrorPath }
+    await pull(repo, mirror, { remoteBranch: 'master' })
+
+    const log = await exec(['log', '--oneline', '-1'], repo.path)
+    assert.match(log.stdout, /mirror-only commit/)
+
+    const upstream = await exec(
+      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+      repo.path
+    )
+    assert.equal(upstream.stdout.trim(), 'origin/master')
+  })
+
   describe('with submodules', () => {
     it('updates submodule references after pulling changes', async t => {
       // Setup: Create parent with submodule, clone it

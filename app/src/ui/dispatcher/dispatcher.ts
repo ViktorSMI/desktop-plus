@@ -838,12 +838,28 @@ export class Dispatcher {
     return this.appStore._push(repository)
   }
 
+  /** Push the current branch to one remote without changing its upstream. */
+  public pushToRemote(
+    repository: Repository,
+    remote: IRemote
+  ): Promise<void> {
+    return this.appStore._pushToRemote(repository, remote)
+  }
+
   private pushWithOptions(repository: Repository, options?: PushOptions) {
     if (options !== undefined && options.forceWithLease) {
       this.dropCurrentBranchFromForcePushList(repository)
     }
 
     return this.appStore._push(repository, options)
+  }
+
+  /** Pull the same-named branch from one remote without changing upstream. */
+  public pullFromRemote(
+    repository: Repository,
+    remote: IRemote
+  ): Promise<void> {
+    return this.appStore._pullFromRemote(repository, remote)
   }
 
   /** Pull the current branch. */

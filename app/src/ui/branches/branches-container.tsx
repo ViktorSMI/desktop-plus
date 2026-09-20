@@ -103,7 +103,7 @@ interface IBranchesContainerState {
   readonly remotes: ReadonlyArray<IRemote>
   readonly selectedRemoteName: string | null
   readonly loadingRemotes: boolean
-  readonly fetchingRemote: boolean
+  readonly remoteOperation: 'fetch' | 'pull' | 'push' | null
 }
 
 /** The unified Branches and Pull Requests component. */
@@ -140,7 +140,7 @@ export class BranchesContainer extends React.Component<
       remotes: [],
       selectedRemoteName: null,
       loadingRemotes: true,
-      fetchingRemote: false,
+      remoteOperation: null,
     }
   }
 
@@ -155,7 +155,7 @@ export class BranchesContainer extends React.Component<
         remotes: [],
         selectedRemoteName: null,
         loadingRemotes: true,
-        fetchingRemote: false,
+        remoteOperation: null,
       })
       this.loadRemotes()
     }
@@ -308,6 +308,19 @@ export class BranchesContainer extends React.Component<
     ).length
   }
 
+  private remoteHasCurrentBranch(remote: IRemote) {
+    const branchName = this.props.currentBranch?.nameWithoutRemote
+    if (branchName === undefined) {
+      return false
+    }
+
+    return this.props.allBranches.some(
+      branch =>
+        branch.remoteName === remote.name &&
+        branch.nameWithoutRemote === branchName
+    )
+  }
+
   private renderRemoteSwitcher = () => {
     if (this.state.loadingRemotes || this.state.remotes.length < 2) {
       return null
@@ -315,6 +328,10 @@ export class BranchesContainer extends React.Component<
 
     const selectedRemote = this.selectedRemote
     const selectedRemoteName = this.state.selectedRemoteName
+    const currentBranchName = this.props.currentBranch?.nameWithoutRemote
+    const isBusy = this.state.remoteOperation !== null
+    const hasRemoteBranch =
+      selectedRemote !== null && this.remoteHasCurrentBranch(selectedRemote)
     const fetchLabel =
       selectedRemote === null ? 'Fetch all' : `Fetch ${selectedRemote.name}`
 
@@ -327,6 +344,7 @@ export class BranchesContainer extends React.Component<
             className="remote-switcher-select"
             value={selectedRemoteName ?? AllRemotesValue}
             onChange={this.onRemoteSelectionChanged}
+            disabled={isBusy}
           >
             <option value={AllRemotesValue}>All remotes</option>
             {this.state.remotes.map(remote => (
@@ -341,29 +359,68 @@ export class BranchesContainer extends React.Component<
           <span className="remote-switcher-description">
             {selectedRemote === null
               ? `${this.state.remotes.length} remotes`
-              : `${this.getRemoteBranchCount(
+              : currentBranchName === undefined
+              ? `${this.getRemoteBranchCount(
                   selectedRemote.name
-                )} remote branches · ${this.getRemoteHost(selectedRemote)}`}
+                )} remote branches · ${this.getRemoteHost(selectedRemote)}`
+              : hasRemoteBranch
+              ? `${currentBranchName} ↔ ${selectedRemote.name}/${currentBranchName}`
+              : `${currentBranchName} → new ${selectedRemote.name}/${currentBranchName}`}
           </span>
 
           <div className="remote-switcher-actions">
             <Button
-              className="remote-fetch-button button-with-icon"
+              className="remote-action-button button-with-icon"
               onClick={this.onFetchSelectedRemote}
-              disabled={this.state.fetchingRemote}
+              disabled={isBusy}
               tooltip={fetchLabel}
             >
               <Octicon
                 symbol={syncClockwise}
                 className={classNames('mr', {
-                  spin: this.state.fetchingRemote,
+                  spin: this.state.remoteOperation === 'fetch',
                 })}
               />
-              {fetchLabel}
+              Fetch
             </Button>
+
+            {selectedRemote !== null && (
+              <>
+                <Button
+                  className="remote-action-button"
+                  onClick={this.onPullSelectedRemote}
+                  disabled={
+                    isBusy ||
+                    currentBranchName === undefined ||
+                    !hasRemoteBranch
+                  }
+                  tooltip={
+                    hasRemoteBranch && currentBranchName !== undefined
+                      ? `Pull ${selectedRemote.name}/${currentBranchName} into ${currentBranchName}`
+                      : `${selectedRemote.name} has no ${currentBranchName ?? 'current'} branch to pull`
+                  }
+                >
+                  Pull
+                </Button>
+                <Button
+                  className="remote-action-button"
+                  onClick={this.onPushSelectedRemote}
+                  disabled={isBusy || currentBranchName === undefined}
+                  tooltip={
+                    currentBranchName === undefined
+                      ? 'Check out a local branch before pushing'
+                      : `Push ${currentBranchName} to ${selectedRemote.name}/${currentBranchName} without changing upstream`
+                  }
+                >
+                  Push
+                </Button>
+              </>
+            )}
+
             <Button
               className="remote-manage-button"
               onClick={this.onManageRemotes}
+              disabled={isBusy}
               tooltip="Manage remotes"
               ariaLabel="Manage remotes"
             >
@@ -392,10 +449,25 @@ export class BranchesContainer extends React.Component<
     })
   }
 
-  private onFetchSelectedRemote = async () => {
-    this.setState({ fetchingRemote: true })
+  private runRemoteOperation = async (
+    operation: 'fetch' | 'pull' | 'push',
+    action: () => Promise<void>
+  ) => {
+    this.setState({ remoteOperation: operation })
 
     try {
+      await action()
+    } catch (error) {
+      await this.props.dispatcher.postError(error)
+    } finally {
+      if (!this.unmounted) {
+        this.setState({ remoteOperation: null })
+      }
+    }
+  }
+
+  private onFetchSelectedRemote = () => {
+    return this.runRemoteOperation('fetch', async () => {
       const selectedRemote = this.selectedRemote
       if (selectedRemote === null) {
         await this.props.dispatcher.fetch(
@@ -409,13 +481,35 @@ export class BranchesContainer extends React.Component<
           FetchType.UserInitiatedTask
         )
       }
-    } catch (error) {
-      await this.props.dispatcher.postError(error)
-    } finally {
-      if (!this.unmounted) {
-        this.setState({ fetchingRemote: false })
-      }
+    })
+  }
+
+  private onPullSelectedRemote = () => {
+    const selectedRemote = this.selectedRemote
+    if (selectedRemote === null) {
+      return
     }
+
+    return this.runRemoteOperation('pull', () =>
+      this.props.dispatcher.pullFromRemote(
+        this.props.repository,
+        selectedRemote
+      )
+    )
+  }
+
+  private onPushSelectedRemote = () => {
+    const selectedRemote = this.selectedRemote
+    if (selectedRemote === null) {
+      return
+    }
+
+    return this.runRemoteOperation('push', () =>
+      this.props.dispatcher.pushToRemote(
+        this.props.repository,
+        selectedRemote
+      )
+    )
   }
 
   private onManageRemotes = () => {

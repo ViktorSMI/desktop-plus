@@ -49,6 +49,41 @@ describe('git/push', () => {
     assert.ok(result.stdout.includes('add new file'))
   })
 
+  it('pushes to a secondary remote without changing branch upstream', async t => {
+    const repo = await setupEmptyRepository(t)
+    await makeCommit(repo, {
+      entries: [{ path: 'README.md', contents: 'initial' }],
+      commitMessage: 'initial commit',
+    })
+
+    const originPath = await createBareUpstream(t, repo)
+    const mirrorPath = await createBareUpstream(t, repo)
+    await exec(['remote', 'add', 'origin', originPath], repo.path)
+    await exec(['remote', 'add', 'mirror', mirrorPath], repo.path)
+    await exec(['fetch', 'origin'], repo.path)
+    await exec(
+      ['branch', '--set-upstream-to=origin/master', 'master'],
+      repo.path
+    )
+
+    await makeCommit(repo, {
+      entries: [{ path: 'mirror.txt', contents: 'mirror content' }],
+      commitMessage: 'push to mirror',
+    })
+
+    const mirror: IRemote = { name: 'mirror', url: mirrorPath }
+    await push(repo, mirror, 'master', 'master', null)
+
+    const upstream = await exec(
+      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+      repo.path
+    )
+    assert.equal(upstream.stdout.trim(), 'origin/master')
+
+    const mirrorLog = await exec(['log', '--oneline', '-1'], mirrorPath)
+    assert.match(mirrorLog.stdout, /push to mirror/)
+  })
+
   it('pushes with --set-upstream for a new branch', async t => {
     const repo = await setupEmptyRepository(t)
     await makeCommit(repo, {

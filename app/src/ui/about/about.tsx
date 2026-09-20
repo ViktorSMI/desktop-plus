@@ -8,7 +8,7 @@ import {
   DefaultDialogFooter,
 } from '../dialog'
 import { LinkButton } from '../lib/link-button'
-import { IUpdateState, UpdateStatus } from '../lib/update-store'
+import { IUpdateState, UpdateStatus, updateStore } from '../lib/update-store'
 import { Loading } from '../lib/loading'
 import { RelativeTime } from '../relative-time'
 import { assertNever } from '../../lib/fatal-error'
@@ -91,10 +91,33 @@ export class About extends React.Component<IAboutProps> {
     )
   }
 
+  private checkForUpdates = () => updateStore.checkForUpdates(false, true)
+
+  private restartForUpdate = () => updateStore.quitAndInstallUpdate()
+
   private renderUpdateButton() {
+    const busy =
+      this.props.updateState.status === UpdateStatus.CheckingForUpdates ||
+      this.props.updateState.status === UpdateStatus.UpdateAvailable
     return (
       <Row>
         <p className="no-padding">
+          {(__FORK_UPDATES_ENABLED__ ||
+            __UPDATES_URL__.startsWith('http://127.0.0.1:')) &&
+            !busy && (
+              <>
+                {this.props.updateState.status === UpdateStatus.UpdateReady ? (
+                  <LinkButton onClick={this.restartForUpdate}>
+                    Restart to update
+                  </LinkButton>
+                ) : (
+                  <LinkButton onClick={this.checkForUpdates}>
+                    Check for updates
+                  </LinkButton>
+                )}
+                <span className="separator">|</span>
+              </>
+            )}
           <LinkButton uri={DesktopPlusReleaseNotesUri}>
             Desktop Plus Releases
           </LinkButton>
@@ -108,7 +131,7 @@ export class About extends React.Component<IAboutProps> {
   }
 
   private renderUpdateDetails() {
-    if (__LINUX__) {
+    if (__LINUX__ && !__FORK_UPDATES_ENABLED__) {
       return (
         <p>
           Please visit the Desktop Plus release page for release notes and to
@@ -160,6 +183,26 @@ export class About extends React.Component<IAboutProps> {
         return (
           <UpdateInfo message="An update has been downloaded and is ready to be installed." />
         )
+      case UpdateStatus.UpdateError:
+        return (
+          <UpdateInfo message="Unable to check or install updates. Try again later." />
+        )
+      case UpdateStatus.ManualUpdateAvailable: {
+        const update = this.props.updateState.manualUpdate
+        return update === undefined ? null : (
+          <UpdateInfo
+            message={`Desktop Plus ${update.version} is available. ${update.reason}`}
+            richMessage={
+              <p>
+                {update.reason}{' '}
+                <LinkButton uri={update.url}>
+                  Download {update.version}
+                </LinkButton>
+              </p>
+            }
+          />
+        )
+      }
       case UpdateStatus.UpdateNotChecked:
         return null
       default:

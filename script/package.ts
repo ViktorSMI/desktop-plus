@@ -33,6 +33,10 @@ import { computeBundleHashSync } from '../app/src/lib/compute-bundle-hash'
 import { rename } from 'fs/promises'
 import { join } from 'path'
 import { assertNonNullable } from '../app/src/lib/fatal-error'
+import {
+  ForkRepository,
+  getWindowsUpdateVersion,
+} from '../app/src/lib/updates/fork-release'
 
 import { packageAppImage } from './package-appimage'
 import { packageDebian, packageTransitionalDebian } from './package-debian'
@@ -106,11 +110,16 @@ function packageWindows() {
   const iconUrl = 'https://desktop.githubusercontent.com/app-icon.ico'
 
   const nugetPkgName = getWindowsIdentifierName()
+  const packageVersion =
+    process.env.DESKTOP_FORK_UPDATES === '1' &&
+    process.env.GITHUB_REPOSITORY === ForkRepository
+      ? getWindowsUpdateVersion(getVersion())
+      : getSemverCompatibleVersion()
   const options: electronInstaller.Options = {
     name: nugetPkgName,
     appDirectory: distPath,
     outputDirectory: outputDir,
-    version: getSemverCompatibleVersion(),
+    version: packageVersion,
     authors: getCompanyName(),
     iconUrl: iconUrl,
     setupIcon: iconSource,
@@ -163,7 +172,7 @@ function packageWindows() {
       for (const kind of shouldMakeDelta() ? ['full', 'delta'] : ['full']) {
         const from = join(
           outputDir,
-          `${getWindowsIdentifierName()}-${getSemverCompatibleVersion()}-${kind}.nupkg`
+          `${getWindowsIdentifierName()}-${packageVersion}-${kind}.nupkg`
         )
         const to = join(
           outputDir,

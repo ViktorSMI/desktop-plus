@@ -356,7 +356,8 @@ export class App extends React.Component<IAppProps, IAppState> {
 
       if (
         !(__RELEASE_CHANNEL__ === 'development') &&
-        status === UpdateStatus.UpdateReady
+        (status === UpdateStatus.UpdateReady ||
+          status === UpdateStatus.ManualUpdateAvailable)
       ) {
         this.props.dispatcher.setUpdateBannerVisibility(true)
       }
@@ -422,7 +423,12 @@ export class App extends React.Component<IAppProps, IAppState> {
       __RELEASE_CHANNEL__ !== 'test'
     ) {
       setInterval(() => this.checkForUpdates(true), UpdateCheckInterval)
-      this.checkForUpdates(true)
+      // Allow Squirrel's first-run installer lock to clear before checking.
+      if (__FORK_UPDATES_ENABLED__) {
+        setTimeout(() => this.checkForUpdates(true), 60000)
+      } else {
+        this.checkForUpdates(true)
+      }
     } else if (await updateStore.isUpdateShowcase()) {
       // The only purpose of this call is so we can see the showcase on dev/test
       // env. Prod and beta environment will trigger this during automatic check
@@ -681,7 +687,12 @@ export class App extends React.Component<IAppProps, IAppState> {
     inBackground: boolean,
     skipGuidCheck: boolean = false
   ) {
-    // Disable autoupdates so that the app doesn't revert to the desktop/desktop upstream whenever there is an update.
+    if (
+      __FORK_UPDATES_ENABLED__ ||
+      __UPDATES_URL__.startsWith('http://127.0.0.1:')
+    ) {
+      return updateStore.checkForUpdates(inBackground, skipGuidCheck)
+    }
   }
 
   private async updateBranchWithContributionTargetBranch() {

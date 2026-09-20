@@ -691,7 +691,7 @@ export class App extends React.Component<IAppProps, IAppState> {
       __FORK_UPDATES_ENABLED__ ||
       __UPDATES_URL__.startsWith('http://127.0.0.1:')
     ) {
-      return updateStore.checkForUpdates(inBackground, skipGuidCheck)
+      updateStore.checkForUpdates(inBackground, skipGuidCheck)
     }
   }
 

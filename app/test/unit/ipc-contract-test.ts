@@ -55,6 +55,7 @@ describe('IPC channel contract', () => {
     'maximize-window',
     'unmaximize-window',
     'close-window',
+    'fork-update-manual',
     'auto-updater-error',
     'auto-updater-checking-for-update',
     'auto-updater-update-available',

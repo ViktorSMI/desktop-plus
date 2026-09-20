@@ -17,7 +17,7 @@ concurrency:
 
 env:
   NODE_VERSION: 24.19.0
-  # No update server is configured; do not request Squirrel delta packages.
+  # The fork serves verified full packages from GitHub Releases, not a delta server.
   RELEASE_CHANNEL: ''
 
 jobs:
@@ -60,9 +60,14 @@ jobs:
     needs: prepare
     uses: ./.github/workflows/ui-screenshots.yml
 
+  updates:
+    name: Validate fork auto updates
+    needs: prepare
+    uses: ./.github/workflows/fork-updater-checks.yml
+
   build:
     name: Build ${{ matrix.friendlyName }} ${{ matrix.arch }}
-    needs: [prepare, screenshots]
+    needs: [prepare, screenshots, updates]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -81,6 +86,7 @@ jobs:
             friendlyName: Linux
     timeout-minutes: 60
     env:
+      DESKTOP_FORK_UPDATES: '1'
       APP_VERSION: ${{ needs.prepare.outputs.version }}
       SEMVER_COMPATIBLE_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
@@ -162,6 +168,7 @@ jobs:
             dist/*-macOS-*.zip
             dist/*.exe
             dist/*.msi
+            dist/*-full.nupkg
             dist/*.AppImage
             dist/*.AppImage.zsync
             dist/*.deb
@@ -171,7 +178,7 @@ jobs:
 
   publish:
     name: Publish beta installers
-    needs: [prepare, screenshots, build]
+    needs: [prepare, screenshots, updates, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -191,6 +198,11 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: release-assets
+
+      - name: Validate packages and generate update manifest
+        run: |
+          python script/create-update-manifest-test.py
+          python script/create-update-manifest.py release-assets "$VERSION"
 
       - name: Generate checksums
         shell: python

@@ -1,0 +1,38 @@
+name: Prepare updater workspace
+
+on:
+  push:
+    branches:
+      - feature/fork-auto-updates
+    paths:
+      - '.github/workflows/export-update-workspace.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+      - name: Export tracked source and local validation tools
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/update-workspace/source /tmp/update-workspace/tools
+          git archive HEAD | tar -x -C /tmp/update-workspace/source
+          cd /tmp/update-workspace/tools
+          npm init -y
+          npm install --ignore-scripts prettier@2.8.8 typescript@5.8.2 semver@7.6.3 tsx@4.19.3 @types/node@22.10.9
+          cd /tmp/update-workspace
+          tar -czf /tmp/update-workspace.tgz source tools
+      - uses: actions/upload-artifact@v7
+        with:
+          name: updater-workspace
+          path: /tmp/update-workspace.tgz
+          retention-days: 1

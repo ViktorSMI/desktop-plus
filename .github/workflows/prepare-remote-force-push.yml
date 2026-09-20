@@ -59,7 +59,17 @@ jobs:
           setup = setup.replace("describe('Dialog focus', () => {", "describe('remote force push confirmation', () => {")
           marker = "describe('remote force push confirmation', () => {"
           assert text.count(marker) == 1
-          source.write_text(text.replace(marker, setup))
+          text = text.replace(marker, setup)
+          marker = 'let restoreIpcSend: (() => void) | null = null'
+          assert text.count(marker) == 1
+          text = text.replace(marker, marker + '\nlet unmountDialog: (() => void) | null = null')
+          marker = '  return {\n    view,'
+          assert text.count(marker) == 1
+          text = text.replace(marker, '  unmountDialog = view.unmount\n' + marker)
+          marker = '  afterEach(() => {\n    restoreIpcSend?.()'
+          assert text.count(marker) == 1
+          text = text.replace(marker, '  afterEach(() => {\n    unmountDialog?.()\n    unmountDialog = null\n    restoreIpcSend?.()')
+          source.write_text(text)
       - uses: ./.github/actions/setup-ci-environment
         with:
           node-version: 24.19.0

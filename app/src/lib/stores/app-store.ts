@@ -110,6 +110,11 @@ import {
   IRemote,
   remoteEquals,
 } from '../../models/remote'
+import { IRemoteForcePushTarget } from '../../models/remote-force-push'
+import {
+  prepareRemoteForcePush,
+  pushToRemoteWithLease,
+} from '../git/remote-force-push'
 import {
   ILocalRepositoryState,
   nameOf,
@@ -6237,6 +6242,46 @@ export class AppStore extends TypedBaseStore<IAppState> {
   ): Promise<void> {
     return this.withRefreshedGitHubRepository(repository, repository => {
       return this.performPush(repository, undefined, remote)
+    })
+  }
+
+  public async _prepareRemoteForcePush(
+    repository: Repository,
+    remote: IRemote
+  ) {
+    const state = this.repositoryStateCache.get(repository)
+    if (state.isPushPullFetchInProgress || state.checkoutProgress !== null) {
+      throw new Error(
+        'Wait for the current Git operation before force pushing.'
+      )
+    }
+    return prepareRemoteForcePush(repository, remote)
+  }
+
+  public async _forcePushToRemote(
+    repository: Repository,
+    target: IRemoteForcePushTarget
+  ) {
+    return this.withPushPullFetch(repository, async () => {
+      const gitStore = this.gitStoreCache.get(repository)
+      try {
+        // No generic Push retry: it could fall back to the configured upstream.
+        await gitStore.performFailableOperation(async () => {
+          let aborted = false
+          await pushToRemoteWithLease(
+            repository,
+            target,
+            { onHookFailure: this.onHookFailure(() => (aborted = true)) },
+            progress => this.updatePushPullFetchProgress(repository, progress)
+          ).catch(error => (aborted ? undefined : Promise.reject(error)))
+          if (!aborted) {
+            await gitStore.fetchRemotes([target.remote], false)
+          }
+        })
+      } finally {
+        this.updatePushPullFetchProgress(repository, null)
+        await this._refreshRepository(repository)
+      }
     })
   }
 

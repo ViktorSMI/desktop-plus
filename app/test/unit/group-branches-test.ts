@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert'
 import { filterBranchesByRemote, groupBranches } from '../../src/ui/branches'
 import { Branch, BranchType } from '../../src/models/branch'
+import { hasRemoteBranch } from '../../src/ui/branches/group-branches'
 import { CommitIdentity } from '../../src/models/commit-identity'
 import { BranchSortOrder } from '../../src/models/branch-sort-order'
 
@@ -79,6 +80,29 @@ describe('Branches grouping', () => {
       upstreamBranch,
     ])
     assert.equal(filterBranchesByRemote(branches, null), branches)
+  })
+
+  it('recognizes remote refs collapsed into local tracking branches', () => {
+    const local = new Branch(
+      'main',
+      'origin/main',
+      branchTip,
+      BranchType.Local,
+      'refs/heads/main',
+      false
+    )
+    const gone = new Branch(
+      'main',
+      'origin/main',
+      branchTip,
+      BranchType.Local,
+      'refs/heads/main',
+      true
+    )
+    assert.equal(hasRemoteBranch([local], 'origin', 'main'), true)
+    assert.equal(hasRemoteBranch([gone], 'origin', 'main'), false)
+    assert.equal(hasRemoteBranch([local], 'gitea', 'main'), false)
+    assert.equal(hasRemoteBranch([local], 'origin', 'other'), false)
   })
 
   it('should group branches', () => {

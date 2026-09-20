@@ -75,6 +75,7 @@ import { GitHubRepository } from '../../models/github-repository'
 import { ManualConflictResolution } from '../../models/manual-conflict-resolution'
 import { Popup, PopupType } from '../../models/popup'
 import { IRemote } from '../../models/remote'
+import { IRemoteForcePushTarget } from '../../models/remote-force-push'
 import {
   PullRequest,
   PullRequestSuggestedNextAction,
@@ -841,6 +842,32 @@ export class Dispatcher {
   /** Push the current branch to one remote without changing its upstream. */
   public pushToRemote(repository: Repository, remote: IRemote): Promise<void> {
     return this.appStore._pushToRemote(repository, remote)
+  }
+
+  /** Explicit remote force pushes always require confirmation, even if the
+   * normal upstream force-push confirmation has been disabled in preferences. */
+  public async confirmForcePushToRemote(
+    repository: Repository,
+    remote: IRemote
+  ) {
+    const target = await this.appStore._prepareRemoteForcePush(
+      repository,
+      remote
+    )
+    await this.closeFoldout(FoldoutType.Branch)
+    await this.showPopup({
+      type: PopupType.ConfirmForcePush,
+      repository,
+      upstreamBranch: `${remote.name}/${target.branchName}`,
+      remoteForcePush: target,
+    })
+  }
+
+  public forcePushToRemote(
+    repository: Repository,
+    target: IRemoteForcePushTarget
+  ) {
+    return this.appStore._forcePushToRemote(repository, target)
   }
 
   private pushWithOptions(repository: Repository, options?: PushOptions) {

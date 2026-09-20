@@ -27,7 +27,11 @@ import { BranchList } from './branch-list'
 import { PullRequestList } from './pull-request-list'
 import { IssueList } from './issue-list'
 import { IssuesStore } from '../../lib/stores/issues-store'
-import { filterBranchesByRemote, IBranchListItem } from './group-branches'
+import {
+  filterBranchesByRemote,
+  hasRemoteBranch,
+  IBranchListItem,
+} from './group-branches'
 import { BranchSortOrder } from '../../models/branch-sort-order'
 import {
   getDefaultAriaLabelForBranch,
@@ -314,11 +318,7 @@ export class BranchesContainer extends React.Component<
       return false
     }
 
-    return this.props.allBranches.some(
-      branch =>
-        branch.remoteName === remote.name &&
-        branch.nameWithoutRemote === branchName
-    )
+    return hasRemoteBranch(this.props.allBranches, remote.name, branchName)
   }
 
   private renderRemoteSwitcher = () => {
@@ -416,6 +416,20 @@ export class BranchesContainer extends React.Component<
                 >
                   Push
                 </Button>
+                <Button
+                  className="remote-action-button"
+                  onClick={this.onForcePushSelectedRemote}
+                  disabled={
+                    isBusy ||
+                    currentBranchName === undefined ||
+                    !hasRemoteBranch
+                  }
+                  tooltip={`Review force pushing to ${selectedRemote.name}/${
+                    currentBranchName ?? ''
+                  } with lease protection`}
+                >
+                  Force push…
+                </Button>
               </>
             )}
 
@@ -508,6 +522,19 @@ export class BranchesContainer extends React.Component<
 
     return this.runRemoteOperation('push', () =>
       this.props.dispatcher.pushToRemote(this.props.repository, selectedRemote)
+    )
+  }
+
+  private onForcePushSelectedRemote = () => {
+    const selectedRemote = this.selectedRemote
+    if (selectedRemote === null || this.state.remoteOperation !== null) {
+      return
+    }
+    return this.runRemoteOperation('push', () =>
+      this.props.dispatcher.confirmForcePushToRemote(
+        this.props.repository,
+        selectedRemote
+      )
     )
   }
 

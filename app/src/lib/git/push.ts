@@ -15,6 +15,9 @@ export type PushOptions = {
    */
   readonly forceWithLease?: boolean
 
+  /** Pin the lease to the tip reviewed by the user, rather than a mutable ref. */
+  readonly expectedRemoteTip?: string
+
   /** A branch to push instead of the current branch */
   readonly branch?: Branch
 
@@ -54,6 +57,18 @@ export async function push(
   options?: PushOptions,
   progressCallback?: (progress: IPushProgress) => void
 ): Promise<void> {
+  if (
+    options?.expectedRemoteTip !== undefined &&
+    (!options.forceWithLease ||
+      !remoteBranch?.startsWith('refs/heads/') ||
+      !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(options.expectedRemoteTip) ||
+      (tagsToPush !== null && tagsToPush.length > 0))
+  ) {
+    throw new Error(
+      'An explicit force-push lease requires a branch ref and a valid expected commit, without tags.'
+    )
+  }
+
   const args = [
     'push',
     remote.name,
@@ -66,7 +81,16 @@ export async function push(
   if (!remoteBranch) {
     args.push('--set-upstream')
   } else if (options?.forceWithLease) {
-    args.push('--force-with-lease')
+    args.push(
+      options.expectedRemoteTip === undefined
+        ? '--force-with-lease'
+        : `--force-with-lease=${remoteBranch}:${options.expectedRemoteTip}`
+    )
+  }
+
+  if (options?.expectedRemoteTip !== undefined) {
+    // Also override push.followTags=true for a confirmed single-branch push.
+    args.push('--no-follow-tags')
   }
 
   if (options?.noVerify) {

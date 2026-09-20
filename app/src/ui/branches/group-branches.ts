@@ -37,6 +37,20 @@ export function filterBranchesByRemote(
   )
 }
 
+/** Remote refs tracked locally are collapsed by GitStore into local branches. */
+export function hasRemoteBranch(
+  branches: ReadonlyArray<Branch>,
+  remoteName: string,
+  branchName: string
+): boolean {
+  const upstream = `${remoteName}/${branchName}`
+  return branches.some(branch =>
+    branch.type === BranchType.Remote
+      ? branch.name === upstream
+      : !branch.isGone && branch.upstream === upstream
+  )
+}
+
 export function groupBranches(
   defaultBranch: Branch | null,
   currentBranch: Branch | null,

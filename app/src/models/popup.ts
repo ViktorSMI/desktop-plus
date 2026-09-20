@@ -7,6 +7,7 @@ import { PullRequest } from './pull-request'
 import { Branch } from './branch'
 import { ReleaseNote, ReleaseSummary } from './release-notes'
 import { IRemote } from './remote'
+import { IRemoteForcePushTarget } from './remote-force-push'
 import { RetryAction } from './retry-actions'
 import { WorkingDirectoryFileChange } from './status'
 import { PreferencesTab } from './preferences'
@@ -316,6 +317,7 @@ export type PopupDetail =
       type: PopupType.ConfirmForcePush
       repository: Repository
       upstreamBranch: string
+      remoteForcePush?: IRemoteForcePushTarget
     }
   | {
       type: PopupType.StashAndSwitchBranch

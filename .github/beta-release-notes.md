@@ -1,13 +1,22 @@
-## Binary comparison improvements
+## Multi-remote workflow
 
-- Reworked binary diffs into an HxD/WinMerge-style side-by-side comparer.
-- Compare up to 64 MiB per side instead of only the first 64 KiB.
-- Resynchronize after inserted or deleted bytes so shifted data does not mark the whole remaining file as changed.
-- Keep stable same-offset alignment for repetitive binary data and fixed-offset DAT-style changes.
-- Show Before/After offsets, hex bytes, and ASCII together.
-- Navigate between changed regions with Previous and Next controls.
-- Collapse long unchanged ranges and bound very large changed regions to keep the UI responsive.
-- Clearly report partial comparisons for oversized files instead of showing a misleading empty diff.
+- Added a remote selector to the Branches tab for repositories with multiple remotes.
+- Switch between GitHub, Gitea, upstream/origin, or any other configured Git remote.
+- Fetch only the selected remote, or fetch all remotes.
+- Pull the current branch from the same-named branch on the selected remote.
+- Push the current branch to the same-named branch on the selected remote.
+- Switching remotes does not rewrite the branch's configured Git upstream.
+- Pull is disabled when the selected remote does not have the current branch; Push can create it there.
+- Local branches remain visible while remote-tracking branches are filtered to the selected remote.
+- The selected remote is remembered per local repository.
+- Existing Manage Remotes remains available from the selector.
+
+The normal toolbar Push/Pull behavior is unchanged and continues to follow the branch's configured upstream. The new controls in the Branches tab are the explicit multi-remote workflow.
+
+## Included from previous betas
+
+- Read-only issue browsing with responsive in-app issue details and comments.
+- HxD/WinMerge-style binary diff improvements.
 
 ## Beta build
 

@@ -35,6 +35,12 @@ jobs:
           path.write_bytes(patch)
           subprocess.run(['git', 'apply', '--check', str(path)], check=True)
           subprocess.run(['git', 'apply', str(path)], check=True)
+          component = Path('app/src/ui/rebase/confirm-force-push.tsx')
+          text = component.read_text()
+          field = '  private submitted = false\n\n'
+          marker = '  public constructor(props: IConfirmForcePushProps) {'
+          assert text.count(field) == 1 and text.count(marker) == 1
+          component.write_text(text.replace(field, '').replace(marker, field + marker))
           subprocess.run(['git', 'rm', '.github/remote-force-push.patch.gz', '.github/workflows/prepare-remote-force-push.yml'], check=True)
 
       - uses: ./.github/actions/setup-ci-environment

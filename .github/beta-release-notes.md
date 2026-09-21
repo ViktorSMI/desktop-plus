@@ -1,21 +1,29 @@
-## Automatic updates for this fork
+## Force push to the selected remote
 
-Windows installations now check only the releases of `ViktorSMI/desktop-plus`. Newer compatible releases are downloaded in the background, verified, and staged with the native Squirrel updater. The application does not restart in the middle of your work: restart normally or choose **Restart to update** when it is ready.
+After squashing or rebasing commits from a second remote, you can now send the rewritten history back from inside Desktop Plus.
 
-The first check runs about one minute after launch, then every four hours. **Help > About > Check for updates** starts a manual check. Beta versions are compared numerically, including beta9 to beta10; stable installations do not silently switch to beta releases.
+Open **Current branch > Branches**, select the destination remote, and choose **Force push...**. Ordinary **Push** remains a non-forcing operation.
 
-### One-time installation required
+### Confirm exactly what will be replaced
 
-Earlier betas have updating disabled in their client code. Install this release manually once. Later updater-enabled releases can then arrive automatically. The version moves to `3.6.7-beta1` to bootstrap the new Windows package version ordering without downgrading an older beta6 installation.
+The confirmation shows the repository, destination remote and branch, sanitized push URL, expected remote commit, and local commit to send. **Cancel** is the default, and this confirmation cannot be skipped by the existing preference.
 
-Windows updates preserve the existing application identity and user data. This release does not switch CPU architecture, change Git remotes, or modify repository contents during update checks.
+The operation uses an explicit `--force-with-lease` tied to the approved remote commit and sends only the approved local commit. A later background Fetch cannot weaken that check. If the remote history changes, the local branch or commit changes, or the push destination changes, the operation is rejected rather than silently retargeted.
 
-### Other platforms
+**Force push rewrites the destination branch's history.** Review the confirmation and coordinate with other contributors before proceeding. Server-side branch protection and pre-push hooks still apply; the client never falls back to plain force.
 
-Our macOS builds are ad-hoc signed and do not support native automatic replacement until Developer ID signing is configured. macOS and Linux users receive a new-release notice with a link to this fork's release page. Linux packages should be updated through the package manager when applicable.
+Only the selected branch is sent. Configured upstream, other remotes, queued tags, and uncommitted files are not changed by this operation. Multiple push destinations and missing or unfetched targets are rejected.
 
-### Verification and release assets
+## Updating
 
-Windows full update packages (`.nupkg`) and `desktop-plus-updates.json` are included alongside installers. The updater validates the repository, version, architecture, exact size, and SHA-256 before Squirrel sees a package. HTTPS and the pinned GitHub repository are the trust root; these checksums are not a separate publisher signature. Windows code signing is still disabled, so platform trust warnings may appear.
+Windows users who installed **3.6.7-beta1** through the installer can receive this release through the fork's automatic updater, or check manually in **Help > About > Check for updates**. Once the update is ready, restart normally or choose **Restart to update**. No forced restart interrupts your work.
 
-Multi-remote Fetch/Pull/Push, responsive read-only Issues, and binary hex diffs from previous betas remain included. Screenshots stay in Actions artifacts only, not in release downloads.
+Users on **3.6.6-beta6 or earlier** need to install this release manually once to enable future Windows updates. macOS and Linux continue to show a release notice and require manual installation or a package-manager update as appropriate.
+
+## Validation and included features
+
+Before merging PR #8, the full platform CI, UI regression checks, and fork updater checks passed. Targeted coverage includes rewritten-history pushes, exact lease rejection after a background fetch, and the confirmation dialog.
+
+Multi-remote Fetch/Pull/Push, responsive read-only Issues, binary hex diffs, and verified Windows auto-updates remain included. Screenshots stay in Actions artifacts only, not in release downloads.
+
+This is a prerelease. Windows code signing is still disabled, and current macOS builds are ad-hoc signed. Platform trust warnings may appear. Windows update packages and `desktop-plus-updates.json` are published alongside installers and checksums; their integrity checks use HTTPS and this GitHub repository as the trust root, not a separate publisher signature.

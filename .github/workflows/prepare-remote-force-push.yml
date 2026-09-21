@@ -45,6 +45,7 @@ jobs:
           test = Path('app/test/unit/ui/remote-force-push-dialog-test.tsx')
           text = test.read_text()
           text = text.replace("import { describe, it } from 'node:test'", "import { afterEach, beforeEach, describe, it } from 'node:test'")
+          text = text.replace('import { fireEvent, render, screen, waitFor }', 'import { cleanup, fireEvent, render, screen, waitFor }')
           text = text.replace("import { ConfirmForcePush }", "import { DialogStackContext } from '../../../src/ui/dialog/dialog'\nimport { ConfirmForcePush }")
           text = text.replace('    <ConfirmForcePush\n', '    <DialogStackContext.Provider value={{ isTopMost: true }}>\n    <ConfirmForcePush\n')
           text = text.replace('    />\n  )', '    />\n    </DialogStackContext.Provider>\n  )')
@@ -83,8 +84,12 @@ jobs:
             })
 
             afterEach(() => {
-              restorePlatformBridges?.()
-              restorePlatformBridges = undefined
+              try {
+                cleanup()
+              } finally {
+                restorePlatformBridges?.()
+                restorePlatformBridges = undefined
+              }
             })
           """
           test.write_text(text.replace(marker, marker + hooks + '\n'))

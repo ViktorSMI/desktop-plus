@@ -108,6 +108,12 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
     const currentBranch = tip.kind === TipState.Valid ? tip.branch : null
     return (
       <BranchesContainer
+        isRemoteOperationBlocked={
+          repositoryState.isPushPullFetchInProgress ||
+          repositoryState.checkoutProgress !== null ||
+          repositoryState.isCommitting ||
+          repositoryState.changesState.conflictState !== null
+        }
         allBranches={branchesState.allBranches}
         recentBranches={branchesState.recentBranches}
         currentBranch={currentBranch}

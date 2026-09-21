@@ -54,6 +54,7 @@ interface IBranchesContainerProps {
   readonly dispatcher: Dispatcher
   readonly repository: Repository
   readonly selectedTab: BranchesTab
+  readonly isRemoteOperationBlocked: boolean
   readonly allBranches: ReadonlyArray<Branch>
   readonly defaultBranch: Branch | null
   readonly currentBranch: Branch | null
@@ -103,7 +104,7 @@ interface IBranchesContainerState {
   readonly remotes: ReadonlyArray<IRemote>
   readonly selectedRemoteName: string | null
   readonly loadingRemotes: boolean
-  readonly remoteOperation: 'fetch' | 'pull' | 'push' | null
+  readonly remoteOperation: 'fetch' | 'pull' | 'push' | 'force-push' | null
 }
 
 /** The unified Branches and Pull Requests component. */
@@ -329,7 +330,8 @@ export class BranchesContainer extends React.Component<
     const selectedRemote = this.selectedRemote
     const selectedRemoteName = this.state.selectedRemoteName
     const currentBranchName = this.props.currentBranch?.nameWithoutRemote
-    const isBusy = this.state.remoteOperation !== null
+    const isBusy =
+      this.state.remoteOperation !== null || this.props.isRemoteOperationBlocked
     const hasRemoteBranch =
       selectedRemote !== null && this.remoteHasCurrentBranch(selectedRemote)
     const fetchLabel =
@@ -430,6 +432,22 @@ export class BranchesContainer extends React.Component<
             </Button>
           </div>
         </div>
+        {selectedRemote !== null && currentBranchName !== undefined && (
+          <div className="remote-force-push-row">
+            <Button
+              className="destructive"
+              onClick={this.onForcePushSelectedRemote}
+              disabled={isBusy || !hasRemoteBranch}
+              tooltip={
+                hasRemoteBranch
+                  ? `Replace history on ${selectedRemote.name}/${currentBranchName} with a checked lease`
+                  : `Fetch ${selectedRemote.name} first. Use Push to create a new remote branch.`
+              }
+            >
+              Force push…
+            </Button>
+          </div>
+        )}
       </div>
     )
   }
@@ -452,7 +470,7 @@ export class BranchesContainer extends React.Component<
   }
 
   private runRemoteOperation = async (
-    operation: 'fetch' | 'pull' | 'push',
+    operation: 'fetch' | 'pull' | 'push' | 'force-push',
     action: () => Promise<void>
   ) => {
     this.setState({ remoteOperation: operation })
@@ -508,6 +526,17 @@ export class BranchesContainer extends React.Component<
 
     return this.runRemoteOperation('push', () =>
       this.props.dispatcher.pushToRemote(this.props.repository, selectedRemote)
+    )
+  }
+
+  private onForcePushSelectedRemote = () => {
+    const remote = this.selectedRemote
+    if (remote === null || this.props.isRemoteOperationBlocked) {
+      return
+    }
+    const repository = this.props.repository
+    return this.runRemoteOperation('force-push', () =>
+      this.props.dispatcher.confirmForcePushToRemote(repository, remote)
     )
   }
 

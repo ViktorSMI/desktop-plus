@@ -3,6 +3,7 @@ import {
   RepositoryWithGitHubRepository,
   RepositoryWithForkedGitHubRepository,
 } from './repository'
+import { IRemoteForcePushRequest } from './remote-force-push'
 import { PullRequest } from './pull-request'
 import { Branch } from './branch'
 import { ReleaseNote, ReleaseSummary } from './release-notes'
@@ -316,6 +317,7 @@ export type PopupDetail =
       type: PopupType.ConfirmForcePush
       repository: Repository
       upstreamBranch: string
+      remoteRequest?: IRemoteForcePushRequest
     }
   | {
       type: PopupType.StashAndSwitchBranch

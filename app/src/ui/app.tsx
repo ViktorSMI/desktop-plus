@@ -2406,6 +2406,7 @@ export class App extends React.Component<IAppProps, IAppState> {
             dispatcher={this.props.dispatcher}
             repository={popup.repository}
             upstreamBranch={popup.upstreamBranch}
+            remoteRequest={popup.remoteRequest}
             askForConfirmationOnForcePush={askForConfirmationOnForcePush}
             onDismissed={onPopupDismissedFn}
           />

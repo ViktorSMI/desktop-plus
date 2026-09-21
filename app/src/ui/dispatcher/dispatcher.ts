@@ -75,6 +75,7 @@ import { GitHubRepository } from '../../models/github-repository'
 import { ManualConflictResolution } from '../../models/manual-conflict-resolution'
 import { Popup, PopupType } from '../../models/popup'
 import { IRemote } from '../../models/remote'
+import { IRemoteForcePushRequest } from '../../models/remote-force-push'
 import {
   PullRequest,
   PullRequestSuggestedNextAction,
@@ -841,6 +842,36 @@ export class Dispatcher {
   /** Push the current branch to one remote without changing its upstream. */
   public pushToRemote(repository: Repository, remote: IRemote): Promise<void> {
     return this.appStore._pushToRemote(repository, remote)
+  }
+
+  /** Always confirm the exact remote and commit pair, independently of preferences. */
+  public async confirmForcePushToRemote(
+    repository: Repository,
+    remote: IRemote
+  ) {
+    const remoteRequest = await this.appStore._prepareForcePushToRemote(
+      repository,
+      remote
+    )
+    await this.closeFoldout(FoldoutType.Branch)
+    await this.showPopup({
+      type: PopupType.ConfirmForcePush,
+      repository,
+      upstreamBranch: `${remoteRequest.remote.name}/${remoteRequest.branchName}`,
+      remoteRequest,
+    })
+  }
+
+  public async forcePushToRemote(
+    repository: Repository,
+    request: IRemoteForcePushRequest
+  ) {
+    try {
+      await this.appStore._forcePushToRemote(repository, request)
+    } catch (error) {
+      // No generic Push retry: it could resolve to another remote or a newer lease.
+      await this.postError(error)
+    }
   }
 
   private pushWithOptions(repository: Repository, options?: PushOptions) {

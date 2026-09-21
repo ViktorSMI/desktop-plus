@@ -110,6 +110,11 @@ import {
   IRemote,
   remoteEquals,
 } from '../../models/remote'
+import { IRemoteForcePushRequest } from '../../models/remote-force-push'
+import {
+  prepareRemoteForcePush,
+  forcePushToRemote,
+} from '../git/remote-force-push'
 import {
   ILocalRepositoryState,
   nameOf,
@@ -6237,6 +6242,54 @@ export class AppStore extends TypedBaseStore<IAppState> {
   ): Promise<void> {
     return this.withRefreshedGitHubRepository(repository, repository => {
       return this.performPush(repository, undefined, remote)
+    })
+  }
+
+  public async _prepareForcePushToRemote(
+    repository: Repository,
+    remote: IRemote
+  ): Promise<IRemoteForcePushRequest> {
+    this.assertCanForcePush(repository)
+    return prepareRemoteForcePush(repository, remote)
+  }
+
+  private assertCanForcePush(repository: Repository) {
+    const state = this.repositoryStateCache.get(repository)
+    if (
+      state.isPushPullFetchInProgress ||
+      state.checkoutProgress !== null ||
+      state.isCommitting ||
+      state.changesState.conflictState !== null
+    ) {
+      throw new Error(
+        'Finish the current repository operation before force pushing.'
+      )
+    }
+  }
+
+  public async _forcePushToRemote(
+    repository: Repository,
+    request: IRemoteForcePushRequest
+  ): Promise<void> {
+    this.assertCanForcePush(repository)
+    await this.withPushPullFetch(repository, async () => {
+      let aborted = false
+      try {
+        await forcePushToRemote(
+          repository,
+          request,
+          { onHookFailure: this.onHookFailure(() => (aborted = true)) },
+          progress => this.updatePushPullFetchProgress(repository, progress)
+        ).catch(error => (aborted ? undefined : Promise.reject(error)))
+        if (!aborted) {
+          await this.gitStoreCache
+            .get(repository)
+            .fetchRemotes([request.remote], false)
+        }
+      } finally {
+        this.updatePushPullFetchProgress(repository, null)
+        await this._refreshRepository(repository)
+      }
     })
   }
 

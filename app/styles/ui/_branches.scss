@@ -123,8 +123,14 @@
     gap: var(--spacing-half);
   }
 
-  .remote-fetch-button {
+  .remote-action-button {
     white-space: nowrap;
+  }
+
+  .remote-force-push-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--spacing-half);
   }
 
   @media (max-width: 430px) {

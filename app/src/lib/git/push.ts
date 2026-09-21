@@ -5,6 +5,7 @@ import { PushProgressParser, executionOptionsWithProgress } from '../progress'
 import { IRemote } from '../../models/remote'
 import { envForRemoteOperation } from './environment'
 import { Branch } from '../../models/branch'
+import { IForcePushLease } from '../../models/remote-force-push'
 
 export type PushOptions = {
   /**
@@ -14,6 +15,9 @@ export type PushOptions = {
    * See https://git-scm.com/docs/git-push#Documentation/git-push.txt---no-force-with-lease
    */
   readonly forceWithLease?: boolean
+
+  /** Explicit approved SHAs for a remote-specific force push. */
+  readonly forcePushLease?: IForcePushLease
 
   /** A branch to push instead of the current branch */
   readonly branch?: Branch
@@ -54,18 +58,41 @@ export async function push(
   options?: PushOptions,
   progressCallback?: (progress: IPushProgress) => void
 ): Promise<void> {
-  const args = [
-    'push',
-    remote.name,
-    remoteBranch ? `${localBranch}:${remoteBranch}` : localBranch,
-  ]
+  const lease = options?.forcePushLease
+  if (
+    lease !== undefined &&
+    (options?.forceWithLease !== true ||
+      !remoteBranch ||
+      !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(lease.localTip) ||
+      !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(lease.expectedRemoteTip) ||
+      (tagsToPush !== null && tagsToPush.length > 0))
+  ) {
+    throw new Error(
+      'An explicit force push requires two commit IDs, one target branch, and no tags.'
+    )
+  }
+
+  const args =
+    lease === undefined
+      ? [
+          'push',
+          remote.name,
+          remoteBranch ? `${localBranch}:${remoteBranch}` : localBranch,
+        ]
+      : [
+          '-c',
+          `remote.${remote.name}.mirror=false`,
+          'push',
+          '--no-follow-tags',
+          `--force-with-lease=refs/heads/${remoteBranch}:${lease.expectedRemoteTip}`,
+        ]
 
   if (tagsToPush !== null) {
     args.push(...tagsToPush)
   }
   if (!remoteBranch) {
     args.push('--set-upstream')
-  } else if (options?.forceWithLease) {
+  } else if (options?.forceWithLease && lease === undefined) {
     args.push('--force-with-lease')
   }
 
@@ -113,6 +140,12 @@ export async function push(
       remote: remote.name,
       branch: localBranch,
     })
+  }
+
+  if (lease !== undefined) {
+    // Pin the source too: a concurrent checkout/commit cannot send different work.
+    // Explicit refspec + no-follow-tags + mirror=false restrict this to one branch.
+    args.push('--', remote.name, `${lease.localTip}:refs/heads/${remoteBranch}`)
   }
 
   await git(args, repository.path, 'push', opts)

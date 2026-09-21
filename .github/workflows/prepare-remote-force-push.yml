@@ -41,6 +41,53 @@ jobs:
           marker = '  public constructor(props: IConfirmForcePushProps) {'
           assert text.count(field) == 1 and text.count(marker) == 1
           component.write_text(text.replace(field, '').replace(marker, field + marker))
+
+          test = Path('app/test/unit/ui/remote-force-push-dialog-test.tsx')
+          text = test.read_text()
+          text = text.replace("import { describe, it } from 'node:test'", "import { afterEach, beforeEach, describe, it } from 'node:test'")
+          text = text.replace("import { ConfirmForcePush }", "import { DialogStackContext } from '../../../src/ui/dialog/dialog'\nimport { ConfirmForcePush }")
+          text = text.replace('    <ConfirmForcePush\n', '    <DialogStackContext.Provider value={{ isTopMost: true }}>\n    <ConfirmForcePush\n')
+          text = text.replace('    />\n  )', '    />\n    </DialogStackContext.Provider>\n  )')
+          marker = "describe('remote force push confirmation', () => {\n"
+          assert text.count(marker) == 1
+          hooks = """
+            let restorePlatformBridges: (() => void) | undefined
+
+            beforeEach(async () => {
+              // Keep the real dialog and controls; only replace Electron and native DOM bridges.
+              const electron = await import('electron')
+              const send = electron.ipcRenderer.send
+              const prototype = HTMLDialogElement.prototype
+              const showModal = Object.getOwnPropertyDescriptor(prototype, 'showModal')
+              const close = Object.getOwnPropertyDescriptor(prototype, 'close')
+              electron.ipcRenderer.send = () => {}
+              prototype.showModal = function () {
+                this.open = true
+              }
+              prototype.close = function () {
+                this.open = false
+              }
+              restorePlatformBridges = () => {
+                electron.ipcRenderer.send = send
+                for (const [name, descriptor] of [
+                  ['showModal', showModal],
+                  ['close', close],
+                ] as const) {
+                  if (descriptor === undefined) {
+                    Reflect.deleteProperty(prototype, name)
+                  } else {
+                    Object.defineProperty(prototype, name, descriptor)
+                  }
+                }
+              }
+            })
+
+            afterEach(() => {
+              restorePlatformBridges?.()
+              restorePlatformBridges = undefined
+            })
+          """
+          test.write_text(text.replace(marker, marker + hooks + '\n'))
           subprocess.run(['git', 'rm', '.github/remote-force-push.patch.gz', '.github/workflows/prepare-remote-force-push.yml'], check=True)
 
       - uses: ./.github/actions/setup-ci-environment
@@ -60,7 +107,6 @@ jobs:
           subprocess.run(['node', 'node_modules/prettier/bin-prettier.js', '--write', *paths], check=True)
       - run: yarn lint
       - run: yarn validate-changelog
-      - run: yarn compile:prod
       - run: yarn test:setup
       - name: Test rewritten history, exact leases, and confirmation UI
         run: |
@@ -68,6 +114,7 @@ jobs:
             app/test/unit/git/remote-force-push-test.ts \
             app/test/unit/git/push-test.ts \
             app/test/unit/ui/remote-force-push-dialog-test.tsx
+      - run: yarn compile:prod
       - name: Commit only the validated implementation
         run: |
           set -euo pipefail

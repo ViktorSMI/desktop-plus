@@ -1,33 +1,35 @@
+## Commit counts for the selected remote
+
+The multi-remote panel now shows how the current local branch differs from the same-named branch on the selected remote, using the same ahead/behind semantics as the normal Push/Pull control.
+
+For example:
+
+`3↑ 2↓` means **3 commits to push** to the selected remote and **2 commits to pull** from it. When both counts are zero the panel shows **Up to date**.
+
+The comparison is against the currently selected remote, not merely the branch's configured Git upstream. It refreshes when you switch remotes, change branches, Fetch, Pull, Push, or Force push.
+
 ## Remember an account for each remote
 
-Repositories with multiple HTTPS remotes can now use a different signed-in account for each remote without repeatedly asking you which Git account to use.
+Repositories with multiple HTTPS remotes can use a different signed-in account for each remote without repeatedly asking which Git account to use.
 
 Open **Current branch > Branches**, select a remote, then choose its **Account** once. Desktop Plus remembers that choice separately for the local repository and remote. Fetch, Pull, Push, Force push, remote-HEAD refreshes, and background fetches route credentials through that remembered account.
 
-When the account can be inferred safely, Desktop Plus selects it automatically: for example, a remote owned by `@bob` prefers the signed-in `@bob` account, and `origin` prefers the account already associated with the repository. Ambiguous same-host remotes with multiple accounts require a one-time explicit choice instead of opening the sign-in flow over and over.
-
-Changing a remote URL or removing the remote clears its saved account mapping. SSH remotes continue to use SSH keys/configuration and are not affected by the account picker.
+When the account can be inferred safely, Desktop Plus selects it automatically. Ambiguous same-host remotes with multiple accounts require a one-time explicit choice instead of reopening the sign-in flow. Changing or removing a remote clears its saved mapping. SSH remotes continue to use SSH keys/configuration.
 
 ## Force push to the selected remote
 
-After squashing or rebasing commits from a second remote, you can send the rewritten history back from inside Desktop Plus.
+After squashing or rebasing commits from a second remote, choose **Force push...** for that remote. Ordinary Push remains non-forcing.
 
-Open **Current branch > Branches**, select the destination remote, and choose **Force push...**. Ordinary **Push** remains a non-forcing operation.
-
-The confirmation shows the repository, destination remote and branch, sanitized push URL, expected remote commit, and local commit to send. **Cancel** is the default. The operation uses an explicit `--force-with-lease` tied to the approved remote commit and sends only the approved local commit. If the destination changed after confirmation, the push is rejected instead of silently overwriting newer history.
-
-**Force push rewrites the destination branch's history.** Server-side branch protection and pre-push hooks still apply. Configured upstream, other remotes, queued tags, and uncommitted files are not changed.
+The confirmation pins both the expected remote commit and the local commit to send and uses an explicit `--force-with-lease`. If the destination changed after confirmation, the operation is rejected instead of silently overwriting newer history. Server-side branch protection and pre-push hooks still apply.
 
 ## Updating
 
-Windows users on **3.6.7-beta1 or beta2** can receive this release through the fork's automatic updater, or check manually in **Help > About > Check for updates**. Once the update is ready, restart normally or choose **Restart to update**.
+Windows users on a previous **3.6.7 beta** can receive this release through the fork's automatic updater, or check manually in **Help > About > Check for updates**. Once ready, restart normally or choose **Restart to update**.
 
-Users on **3.6.6-beta6 or earlier** still need one manual installation of a 3.6.7 beta to enable future Windows updates. macOS and Linux continue to show a release notice and require manual installation or a package-manager update as appropriate.
+Users on **3.6.6-beta6 or earlier** still need one manual installation of a 3.6.7 beta to enable future Windows updates. macOS and Linux continue to require manual installation or a package-manager update.
 
-## Validation and included features
+## Included features
 
-The account-routing change passed repository lint and changelog validation before release. The release workflow again gates publication on UI checks, updater checks, production builds, unit/script tests, and packaging for Windows, macOS, and Linux.
+Multi-remote Fetch/Pull/Push/Force push, per-remote account routing, responsive read-only Issues, binary hex diffs, and verified Windows auto-updates remain included. Screenshots stay in Actions artifacts only.
 
-Multi-remote Fetch/Pull/Push/Force push, responsive read-only Issues, binary hex diffs, and verified Windows auto-updates remain included. Screenshots stay in Actions artifacts only, not in release downloads.
-
-This is a prerelease. Windows code signing is still disabled, and current macOS builds are ad-hoc signed. Platform trust warnings may appear. Windows update packages and `desktop-plus-updates.json` are published alongside installers and checksums; their integrity checks use HTTPS and this GitHub repository as the trust root, not a separate publisher signature.
+This is a prerelease. Windows code signing is still disabled, and current macOS builds are ad-hoc signed. Platform trust warnings may appear.

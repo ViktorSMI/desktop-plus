@@ -268,6 +268,8 @@ import {
   GitResetMode,
   reset,
   getBranchAheadBehind,
+  getAheadBehind,
+  revSymmetricDifference,
   getRebaseInternalState,
   getCommit,
   appendIgnoreFile,
@@ -8968,6 +8970,17 @@ export class AppStore extends TypedBaseStore<IAppState> {
   /** This shouldn't be called directly. See `Dispatcher`. */
   public _getRemotes(repository: Repository): Promise<ReadonlyArray<IRemote>> {
     return getRemotes(repository)
+  }
+
+  public _getRemoteAheadBehind(
+    repository: Repository,
+    remote: IRemote,
+    branchName: string
+  ): Promise<IAheadBehind | null> {
+    return getAheadBehind(
+      repository,
+      revSymmetricDifference(branchName, `${remote.name}/${branchName}`)
+    )
   }
 
   public _getAccounts(): ReadonlyArray<Account> {

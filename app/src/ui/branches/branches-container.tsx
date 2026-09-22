@@ -5,7 +5,7 @@ import {
   Repository,
   isRepositoryWithGitHubRepository,
 } from '../../models/repository'
-import { Branch } from '../../models/branch'
+import { Branch, IAheadBehind } from '../../models/branch'
 import { BranchesTab } from '../../models/branches-tab'
 import { FetchType } from '../../models/fetch'
 import { PopupType } from '../../models/popup'
@@ -47,6 +47,7 @@ import { PullRequestQuickView } from '../pull-request-quick-view'
 import { Emoji } from '../../lib/emoji'
 import classNames from 'classnames'
 import { asHost, parseRemote } from '../../lib/remote-parsing'
+import { formatCompactNumber } from '../../lib/format-number'
 import {
   clearRemoteAccountLogin,
   getAccountsForRemote,
@@ -114,6 +115,8 @@ interface IBranchesContainerState {
   readonly remoteAccountLogins: ReadonlyMap<string, string>
   readonly selectedRemoteName: string | null
   readonly loadingRemotes: boolean
+  readonly remoteAheadBehind: IAheadBehind | null
+  readonly loadingRemoteAheadBehind: boolean
   readonly remoteOperation: 'fetch' | 'pull' | 'push' | 'force-push' | null
 }
 
@@ -138,6 +141,7 @@ export class BranchesContainer extends React.Component<
 
   private pullRequestQuickViewTimerId: number | null = null
   private unmounted = false
+  private remoteAheadBehindRequestId = 0
 
   public constructor(props: IBranchesContainerProps) {
     super(props)
@@ -153,6 +157,8 @@ export class BranchesContainer extends React.Component<
       remoteAccountLogins: new Map(),
       selectedRemoteName: null,
       loadingRemotes: true,
+      remoteAheadBehind: null,
+      loadingRemoteAheadBehind: false,
       remoteOperation: null,
     }
   }
@@ -170,9 +176,20 @@ export class BranchesContainer extends React.Component<
         remoteAccountLogins: new Map(),
         selectedRemoteName: null,
         loadingRemotes: true,
+        remoteAheadBehind: null,
+        loadingRemoteAheadBehind: false,
         remoteOperation: null,
       })
       this.loadRemotes()
+      return
+    }
+
+    if (
+      prevProps.currentBranch?.ref !== this.props.currentBranch?.ref ||
+      prevProps.currentBranch?.tip.sha !== this.props.currentBranch?.tip.sha ||
+      prevProps.allBranches !== this.props.allBranches
+    ) {
+      this.loadRemoteAheadBehind()
     }
   }
 
@@ -270,13 +287,16 @@ export class BranchesContainer extends React.Component<
         }
       }
 
-      this.setState({
-        remotes,
-        accounts,
-        remoteAccountLogins,
-        selectedRemoteName: this.resolveSelectedRemoteName(remotes),
-        loadingRemotes: false,
-      })
+      this.setState(
+        {
+          remotes,
+          accounts,
+          remoteAccountLogins,
+          selectedRemoteName: this.resolveSelectedRemoteName(remotes),
+          loadingRemotes: false,
+        },
+        this.loadRemoteAheadBehind
+      )
     } catch (error) {
       if (!this.unmounted) {
         this.setState({
@@ -285,6 +305,8 @@ export class BranchesContainer extends React.Component<
           remoteAccountLogins: new Map(),
           selectedRemoteName: null,
           loadingRemotes: false,
+          remoteAheadBehind: null,
+          loadingRemoteAheadBehind: false,
         })
       }
       await this.props.dispatcher.postError(error)
@@ -366,6 +388,87 @@ export class BranchesContainer extends React.Component<
       branch =>
         branch.remoteName === remote.name &&
         branch.nameWithoutRemote === branchName
+    )
+  }
+
+  private loadRemoteAheadBehind = async () => {
+    const requestId = ++this.remoteAheadBehindRequestId
+    const remote = this.selectedRemote
+    const branch = this.props.currentBranch
+
+    if (remote === null || branch === null || !this.remoteHasCurrentBranch(remote)) {
+      this.setState({
+        remoteAheadBehind: null,
+        loadingRemoteAheadBehind: false,
+      })
+      return
+    }
+
+    this.setState({ loadingRemoteAheadBehind: true })
+
+    try {
+      const remoteAheadBehind = await this.props.dispatcher.getRemoteAheadBehind(
+        this.props.repository,
+        remote,
+        branch.nameWithoutRemote
+      )
+
+      if (this.unmounted || requestId !== this.remoteAheadBehindRequestId) {
+        return
+      }
+
+      this.setState({
+        remoteAheadBehind,
+        loadingRemoteAheadBehind: false,
+      })
+    } catch (error) {
+      if (this.unmounted || requestId !== this.remoteAheadBehindRequestId) {
+        return
+      }
+
+      log.warn(
+        `Unable to compare ${branch.nameWithoutRemote} with ${remote.name}/${branch.nameWithoutRemote}`,
+        error
+      )
+      this.setState({
+        remoteAheadBehind: null,
+        loadingRemoteAheadBehind: false,
+      })
+    }
+  }
+
+  private renderRemoteAheadBehind() {
+    const aheadBehind = this.state.remoteAheadBehind
+    if (this.state.loadingRemoteAheadBehind) {
+      return <span className="remote-ahead-behind loading">Comparing…</span>
+    }
+
+    if (aheadBehind === null) {
+      return null
+    }
+
+    if (aheadBehind.ahead === 0 && aheadBehind.behind === 0) {
+      return <span className="remote-ahead-behind">Up to date</span>
+    }
+
+    return (
+      <span
+        className="remote-ahead-behind"
+        aria-label={`${aheadBehind.ahead} commits to push, ${aheadBehind.behind} commits to pull`}
+      >
+        {aheadBehind.ahead > 0 && (
+          <span title={`${aheadBehind.ahead} commits to push`}>
+            {formatCompactNumber(aheadBehind.ahead)}
+            <Octicon symbol={octicons.arrowUp} />
+          </span>
+        )}
+        {aheadBehind.behind > 0 && (
+          <span title={`${aheadBehind.behind} commits to pull`}>
+            {formatCompactNumber(aheadBehind.behind)}
+            <Octicon symbol={octicons.arrowDown} />
+          </span>
+        )}
+      </span>
     )
   }
 
@@ -461,6 +564,11 @@ export class BranchesContainer extends React.Component<
               ? `${currentBranchName} ↔ ${selectedRemote.name}/${currentBranchName}`
               : `${currentBranchName} → new ${selectedRemote.name}/${currentBranchName}`}
           </span>
+
+          {selectedRemote !== null &&
+            currentBranchName !== undefined &&
+            hasRemoteBranch &&
+            this.renderRemoteAheadBehind()}
 
           <div className="remote-switcher-actions">
             <Button
@@ -583,10 +691,14 @@ export class BranchesContainer extends React.Component<
       selectedRemoteName ?? AllRemotesValue
     )
 
-    this.setState({
-      selectedRemoteName,
-      selectedBranch: this.props.currentBranch,
-    })
+    this.setState(
+      {
+        selectedRemoteName,
+        selectedBranch: this.props.currentBranch,
+        remoteAheadBehind: null,
+      },
+      this.loadRemoteAheadBehind
+    )
   }
 
   private runRemoteOperation = async (
@@ -601,7 +713,7 @@ export class BranchesContainer extends React.Component<
       await this.props.dispatcher.postError(error)
     } finally {
       if (!this.unmounted) {
-        this.setState({ remoteOperation: null })
+        this.setState({ remoteOperation: null }, this.loadRemoteAheadBehind)
       }
     }
   }

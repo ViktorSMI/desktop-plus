@@ -122,6 +122,26 @@
     font-size: var(--font-size-sm);
   }
 
+  .remote-ahead-behind {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--spacing-half);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary-color);
+
+    > span {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    &.loading {
+      font-style: italic;
+    }
+  }
+
   .remote-switcher-actions {
     display: flex;
     flex-shrink: 0;

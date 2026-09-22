@@ -1865,6 +1865,15 @@ export class Dispatcher {
     return this.appStore._getRemotes(repository)
   }
 
+  /** Compare the current local branch with the same-named branch on a remote. */
+  public getRemoteAheadBehind(
+    repository: Repository,
+    remote: IRemote,
+    branchName: string
+  ): Promise<IAheadBehind | null> {
+    return this.appStore._getRemoteAheadBehind(repository, remote, branchName)
+  }
+
   /** Lists accounts available for remote-specific authentication. */
   public getAccounts(): ReadonlyArray<Account> {
     return this.appStore._getAccounts()

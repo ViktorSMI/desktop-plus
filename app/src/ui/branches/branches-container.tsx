@@ -396,7 +396,11 @@ export class BranchesContainer extends React.Component<
     const remote = this.selectedRemote
     const branch = this.props.currentBranch
 
-    if (remote === null || branch === null || !this.remoteHasCurrentBranch(remote)) {
+    if (
+      remote === null ||
+      branch === null ||
+      !this.remoteHasCurrentBranch(remote)
+    ) {
       this.setState({
         remoteAheadBehind: null,
         loadingRemoteAheadBehind: false,

@@ -1,0 +1,35 @@
+name: Format remote commit counts
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/format-remote-commit-counts.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: yarn
+      - run: yarn
+      - name: Apply locked Prettier
+        run: ./node_modules/.bin/prettier --write app/src/ui/branches/branches-container.tsx
+      - name: Commit formatting
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/ui/branches/branches-container.tsx
+          if ! git diff --cached --quiet; then
+            git commit -m 'Apply project formatting to remote commit counts'
+            git push origin HEAD:main
+          fi

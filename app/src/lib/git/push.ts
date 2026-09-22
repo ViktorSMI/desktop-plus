@@ -5,6 +5,7 @@ import { PushProgressParser, executionOptionsWithProgress } from '../progress'
 import { IRemote } from '../../models/remote'
 import { envForRemoteOperation } from './environment'
 import { Branch } from '../../models/branch'
+import { getRemoteAccountLogin } from '../remote-account-preference'
 import { IForcePushLease } from '../../models/remote-force-push'
 
 export type PushOptions = {
@@ -101,7 +102,10 @@ export async function push(
   }
 
   let opts: IGitStringExecutionOptions = {
-    env: await envForRemoteOperation(remote.url),
+    env: await envForRemoteOperation(
+      remote.url,
+      getRemoteAccountLogin(repository.path, remote.name)
+    ),
     interceptHooks: ['pre-push'],
     onHookProgress: options?.onHookProgress,
     onHookFailure: options?.onHookFailure,

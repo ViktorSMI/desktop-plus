@@ -69,11 +69,16 @@
   border-bottom: var(--base-border);
   background: var(--box-alt-background-color);
 
-  .remote-switcher-row {
+  .remote-switcher-row,
+  .remote-account-row {
     display: flex;
     align-items: flex-end;
     gap: var(--spacing-half);
     min-width: 0;
+  }
+
+  .remote-account-row {
+    margin-top: var(--spacing-half);
   }
 
   .remote-switcher-icon {

@@ -10,6 +10,7 @@ import { BranchesTab } from '../../models/branches-tab'
 import { FetchType } from '../../models/fetch'
 import { PopupType } from '../../models/popup'
 import { IRemote } from '../../models/remote'
+import { Account } from '../../models/account'
 
 import { Dispatcher } from '../dispatcher'
 import { FoldoutType } from '../../lib/app-state'
@@ -46,6 +47,13 @@ import { PullRequestQuickView } from '../pull-request-quick-view'
 import { Emoji } from '../../lib/emoji'
 import classNames from 'classnames'
 import { asHost, parseRemote } from '../../lib/remote-parsing'
+import {
+  clearRemoteAccountLogin,
+  getAccountsForRemote,
+  getRemoteAccountLogin,
+  inferRemoteAccountLogin,
+  setRemoteAccountLogin,
+} from '../../lib/remote-account-preference'
 
 const AllRemotesValue = '__all_remotes__'
 const RemoteSelectionStoragePrefix = 'branches-selected-remote:'
@@ -102,6 +110,8 @@ interface IBranchesContainerState {
     prListItemTop: number
   } | null
   readonly remotes: ReadonlyArray<IRemote>
+  readonly accounts: ReadonlyArray<Account>
+  readonly remoteAccountLogins: ReadonlyMap<string, string>
   readonly selectedRemoteName: string | null
   readonly loadingRemotes: boolean
   readonly remoteOperation: 'fetch' | 'pull' | 'push' | 'force-push' | null
@@ -139,6 +149,8 @@ export class BranchesContainer extends React.Component<
       branchFilterText: '',
       pullRequestBeingViewed: null,
       remotes: [],
+      accounts: [],
+      remoteAccountLogins: new Map(),
       selectedRemoteName: null,
       loadingRemotes: true,
       remoteOperation: null,
@@ -154,6 +166,8 @@ export class BranchesContainer extends React.Component<
     if (prevProps.repository.path !== this.props.repository.path) {
       this.setState({
         remotes: [],
+        accounts: [],
+        remoteAccountLogins: new Map(),
         selectedRemoteName: null,
         loadingRemotes: true,
         remoteOperation: null,
@@ -219,16 +233,47 @@ export class BranchesContainer extends React.Component<
     const repositoryPath = this.props.repository.path
 
     try {
-      const remotes = await this.props.dispatcher.getRemotes(
-        this.props.repository
-      )
+      const [remotes, accounts] = await Promise.all([
+        this.props.dispatcher.getRemotes(this.props.repository),
+        Promise.resolve(this.props.dispatcher.getAccounts()),
+      ])
 
       if (this.unmounted || repositoryPath !== this.props.repository.path) {
         return
       }
 
+      const remoteAccountLogins = new Map<string, string>()
+      for (const remote of remotes) {
+        const candidates = getAccountsForRemote(accounts, remote)
+        const stored = getRemoteAccountLogin(repositoryPath, remote.name)
+
+        if (
+          stored !== null &&
+          candidates.some(account => account.login === stored)
+        ) {
+          remoteAccountLogins.set(remote.name, stored)
+          continue
+        }
+
+        if (stored !== null) {
+          clearRemoteAccountLogin(repositoryPath, remote.name)
+        }
+
+        const inferred = inferRemoteAccountLogin(
+          accounts,
+          remote,
+          this.props.repository.login
+        )
+        if (inferred !== null) {
+          setRemoteAccountLogin(repositoryPath, remote.name, inferred)
+          remoteAccountLogins.set(remote.name, inferred)
+        }
+      }
+
       this.setState({
         remotes,
+        accounts,
+        remoteAccountLogins,
         selectedRemoteName: this.resolveSelectedRemoteName(remotes),
         loadingRemotes: false,
       })
@@ -236,6 +281,8 @@ export class BranchesContainer extends React.Component<
       if (!this.unmounted) {
         this.setState({
           remotes: [],
+          accounts: [],
+          remoteAccountLogins: new Map(),
           selectedRemoteName: null,
           loadingRemotes: false,
         })
@@ -322,6 +369,20 @@ export class BranchesContainer extends React.Component<
     )
   }
 
+  private get selectedRemoteAccounts(): ReadonlyArray<Account> {
+    const remote = this.selectedRemote
+    return remote === null
+      ? []
+      : getAccountsForRemote(this.state.accounts, remote)
+  }
+
+  private get selectedRemoteAccountLogin(): string | null {
+    const remote = this.selectedRemote
+    return remote === null
+      ? null
+      : this.state.remoteAccountLogins.get(remote.name) ?? null
+  }
+
   private renderRemoteSwitcher = () => {
     if (this.state.loadingRemotes || this.state.remotes.length < 2) {
       return null
@@ -336,6 +397,12 @@ export class BranchesContainer extends React.Component<
       selectedRemote !== null && this.remoteHasCurrentBranch(selectedRemote)
     const fetchLabel =
       selectedRemote === null ? 'Fetch all' : `Fetch ${selectedRemote.name}`
+    const remoteAccounts = this.selectedRemoteAccounts
+    const accountSelectionRequired =
+      selectedRemote !== null &&
+      remoteAccounts.length > 1 &&
+      this.selectedRemoteAccountLogin === null
+    const operationDisabled = isBusy || accountSelectionRequired
 
     return (
       <div className="remote-switcher">
@@ -357,6 +424,31 @@ export class BranchesContainer extends React.Component<
           </Select>
         </div>
 
+        {selectedRemote !== null && remoteAccounts.length > 0 && (
+          <div className="remote-account-row">
+            <Octicon
+              className="remote-switcher-icon"
+              symbol={octicons.person}
+            />
+            <Select
+              label="Account"
+              className="remote-switcher-select"
+              value={this.selectedRemoteAccountLogin ?? ''}
+              onChange={this.onRemoteAccountChanged}
+              disabled={isBusy}
+            >
+              {remoteAccounts.length > 1 && (
+                <option value="">Choose account…</option>
+              )}
+              {remoteAccounts.map(account => (
+                <option value={account.login} key={account.login}>
+                  @{account.login} — {account.friendlyEndpoint}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+
         <div className="remote-switcher-meta">
           <span className="remote-switcher-description">
             {selectedRemote === null
@@ -374,8 +466,12 @@ export class BranchesContainer extends React.Component<
             <Button
               className="remote-action-button button-with-icon"
               onClick={this.onFetchSelectedRemote}
-              disabled={isBusy}
-              tooltip={fetchLabel}
+              disabled={operationDisabled}
+              tooltip={
+                accountSelectionRequired
+                  ? 'Choose an account for this remote first'
+                  : fetchLabel
+              }
             >
               <Octicon
                 symbol={syncClockwise}
@@ -392,7 +488,7 @@ export class BranchesContainer extends React.Component<
                   className="remote-action-button"
                   onClick={this.onPullSelectedRemote}
                   disabled={
-                    isBusy ||
+                    operationDisabled ||
                     currentBranchName === undefined ||
                     !hasRemoteBranch
                   }
@@ -409,7 +505,9 @@ export class BranchesContainer extends React.Component<
                 <Button
                   className="remote-action-button"
                   onClick={this.onPushSelectedRemote}
-                  disabled={isBusy || currentBranchName === undefined}
+                  disabled={
+                    operationDisabled || currentBranchName === undefined
+                  }
                   tooltip={
                     currentBranchName === undefined
                       ? 'Check out a local branch before pushing'
@@ -437,7 +535,7 @@ export class BranchesContainer extends React.Component<
             <Button
               className="destructive"
               onClick={this.onForcePushSelectedRemote}
-              disabled={isBusy || !hasRemoteBranch}
+              disabled={operationDisabled || !hasRemoteBranch}
               tooltip={
                 hasRemoteBranch
                   ? `Replace history on ${selectedRemote.name}/${currentBranchName} with a checked lease`
@@ -450,6 +548,28 @@ export class BranchesContainer extends React.Component<
         )}
       </div>
     )
+  }
+
+  private onRemoteAccountChanged = (
+    event: React.FormEvent<HTMLSelectElement>
+  ) => {
+    const remote = this.selectedRemote
+    if (remote === null) {
+      return
+    }
+
+    const login = event.currentTarget.value
+    const remoteAccountLogins = new Map(this.state.remoteAccountLogins)
+
+    if (login.length === 0) {
+      clearRemoteAccountLogin(this.props.repository.path, remote.name)
+      remoteAccountLogins.delete(remote.name)
+    } else {
+      setRemoteAccountLogin(this.props.repository.path, remote.name, login)
+      remoteAccountLogins.set(remote.name, login)
+    }
+
+    this.setState({ remoteAccountLogins })
   }
 
   private onRemoteSelectionChanged = (

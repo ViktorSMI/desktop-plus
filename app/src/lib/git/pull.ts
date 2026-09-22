@@ -12,6 +12,7 @@ import { PullProgressParser, executionOptionsWithProgress } from '../progress'
 import { IRemote } from '../../models/remote'
 import { envForRemoteOperation } from './environment'
 import { getConfigValue } from './config'
+import { getRemoteAccountLogin } from '../remote-account-preference'
 
 /**
  * Pull from the specified remote.
@@ -43,7 +44,10 @@ export async function pull(
   }
 ): Promise<void> {
   let opts: IGitStringExecutionOptions = {
-    env: await envForRemoteOperation(remote.url),
+    env: await envForRemoteOperation(
+      remote.url,
+      getRemoteAccountLogin(repository.path, remote.name)
+    ),
     // git pull triggers merge or rebase hooks depending on config, instead of
     // trying to check pull.rebase and friends we'll just intercept all possible
     // hooks that could be run as part of a pull operation.

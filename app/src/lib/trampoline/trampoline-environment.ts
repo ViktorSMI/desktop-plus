@@ -37,6 +37,10 @@ export const getHasRejectedCredentialsForEndpoint = (
 }
 const isBackgroundTaskEnvironment = new Map<string, boolean>()
 const trampolineEnvironmentPath = new Map<string, string>()
+const preferredAccountLogin = new Map<string, string>()
+
+export const getPreferredAccountLogin = (trampolineToken: string) =>
+  preferredAccountLogin.get(trampolineToken) ?? null
 
 export const getTrampolineEnvironmentPath = (trampolineToken: string) =>
   trampolineEnvironmentPath.get(trampolineToken) ?? process.cwd()
@@ -102,6 +106,11 @@ export async function withTrampolineEnv<T>(
   return withTrampolineToken(async token => {
     isBackgroundTaskEnvironment.set(token, isBackgroundTask)
     trampolineEnvironmentPath.set(token, path)
+
+    const accountLogin = customEnv?.['DESKTOP_REMOTE_ACCOUNT_LOGIN']
+    if (accountLogin) {
+      preferredAccountLogin.set(token, accountLogin)
+    }
 
     const existingGitEnvConfig =
       customEnv?.['GIT_CONFIG_PARAMETERS'] ??
@@ -198,6 +207,7 @@ export async function withTrampolineEnv<T>(
       isBackgroundTaskEnvironment.delete(token)
       hasRejectedCredentialsForEndpoint.delete(token)
       trampolineEnvironmentPath.delete(token)
+      preferredAccountLogin.delete(token)
       forgetAccountCredentials(token)
     }
   })

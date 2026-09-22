@@ -111,6 +111,7 @@ import {
   remoteEquals,
 } from '../../models/remote'
 import { IRemoteForcePushRequest } from '../../models/remote-force-push'
+import { clearRemoteAccountLogin } from '../remote-account-preference'
 import {
   prepareRemoteForcePush,
   forcePushToRemote,
@@ -8961,11 +8962,16 @@ export class AppStore extends TypedBaseStore<IAppState> {
   ): Promise<void> {
     const gitStore = this.gitStoreCache.get(repository)
     await gitStore.setRemoteURL(name, url)
+    clearRemoteAccountLogin(repository.path, name)
   }
 
   /** This shouldn't be called directly. See `Dispatcher`. */
   public _getRemotes(repository: Repository): Promise<ReadonlyArray<IRemote>> {
     return getRemotes(repository)
+  }
+
+  public _getAccounts(): ReadonlyArray<Account> {
+    return this.accounts.slice()
   }
 
   /** This shouldn't be called directly. See `Dispatcher`. */
@@ -8993,6 +8999,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   ): Promise<void> {
     const gitStore = this.gitStoreCache.get(repository)
     await gitStore.removeRemote(name)
+    clearRemoteAccountLogin(repository.path, name)
     await this._refreshRepository(repository)
   }
 

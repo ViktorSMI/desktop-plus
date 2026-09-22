@@ -11,6 +11,7 @@ import {
 import {
   getCredentialUrl,
   getIsBackgroundTaskEnvironment,
+  getPreferredAccountLogin,
   getTrampolineEnvironmentPath,
   setHasRejectedCredentialsForEndpoint,
 } from './trampoline-environment'
@@ -302,7 +303,10 @@ async function getLogin(
 ): Promise<string | null> {
   const path = getTrampolineEnvironmentPath(token)
   return (
-    (await ui.getLoginForRepositoryPath(path)) ?? input.get('username') ?? null
+    getPreferredAccountLogin(token) ??
+    (await ui.getLoginForRepositoryPath(path)) ??
+    input.get('username') ??
+    null
   )
 }
 

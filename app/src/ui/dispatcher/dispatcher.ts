@@ -1865,6 +1865,11 @@ export class Dispatcher {
     return this.appStore._getRemotes(repository)
   }
 
+  /** Lists accounts available for remote-specific authentication. */
+  public getAccounts(): ReadonlyArray<Account> {
+    return this.appStore._getAccounts()
+  }
+
   /**
    * Adds a new remote with the given name and URL and fetches it so that its
    * branches appear in the branches list.

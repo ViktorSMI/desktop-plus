@@ -73,10 +73,14 @@ export function getFallbackUrlForProxyResolve(
  *                  pointing to another host entirely. Used to resolve which
  *                  proxy (if any) should be used for the operation.
  */
-export async function envForRemoteOperation(remoteUrl: string) {
+export async function envForRemoteOperation(
+  remoteUrl: string,
+  accountLogin?: string | null
+) {
   return {
     ...envForAuthentication(),
     ...(await envForProxy(remoteUrl)),
+    DESKTOP_REMOTE_ACCOUNT_LOGIN: accountLogin ?? undefined,
   }
 }
 

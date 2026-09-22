@@ -411,11 +411,12 @@ export class BranchesContainer extends React.Component<
     this.setState({ loadingRemoteAheadBehind: true })
 
     try {
-      const remoteAheadBehind = await this.props.dispatcher.getRemoteAheadBehind(
-        this.props.repository,
-        remote,
-        branch.nameWithoutRemote
-      )
+      const remoteAheadBehind =
+        await this.props.dispatcher.getRemoteAheadBehind(
+          this.props.repository,
+          remote,
+          branch.nameWithoutRemote
+        )
 
       if (this.unmounted || requestId !== this.remoteAheadBehindRequestId) {
         return

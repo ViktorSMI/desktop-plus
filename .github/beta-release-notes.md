@@ -1,30 +1,39 @@
-## Commit counts for the selected remote
+## One-click synchronization for two remotes
 
-The multi-remote panel now shows how the current local branch differs from the same-named branch on the selected remote, using the same ahead/behind semantics as the normal Push/Pull control.
+Repositories with exactly two user-configured remotes can now opt into **Sync both remotes** from **Current branch > Branches**.
 
-For example:
+When enabled, the normal toolbar network button becomes **Sync remotes**. One click:
 
-`3↑ 2↓` means **3 commits to push** to the selected remote and **2 commits to pull** from it. When both counts are zero the panel shows **Up to date**.
+- fetches both remotes using each remote's remembered account,
+- compares the current local branch with the same-named branch on both remotes,
+- fast-forwards the local branch to the newest history when one side cleanly contains the others,
+- then pushes that resulting branch to both remotes.
 
-The comparison is against the currently selected remote, not merely the branch's configured Git upstream. It refreshes when you switch remotes, change branches, Fetch, Pull, Push, or Force push.
+This is deliberately non-destructive. It never force-pushes. If the two remotes contain independent divergent commits and no existing local/remote tip already contains both histories, synchronization stops before pushing and asks you to merge the divergent histories first. A failed fetch also aborts before any push, so stale tracking refs are never used to decide what to overwrite.
 
-## Remember an account for each remote
+If the current local branch already contains commits from both diverged remotes (for example after you merged them), **Sync remotes** can safely push that merged history to both sides.
 
-Repositories with multiple HTTPS remotes can use a different signed-in account for each remote without repeatedly asking which Git account to use.
+The option is stored per repository. Desktop Plus internal helper remotes are ignored; the feature requires exactly two normal user remotes.
 
-Open **Current branch > Branches**, select a remote, then choose its **Account** once. Desktop Plus remembers that choice separately for the local repository and remote. Fetch, Pull, Push, Force push, remote-HEAD refreshes, and background fetches route credentials through that remembered account.
+## Selected-remote commit counts
 
-When the account can be inferred safely, Desktop Plus selects it automatically. Ambiguous same-host remotes with multiple accounts require a one-time explicit choice instead of reopening the sign-in flow. Changing or removing a remote clears its saved mapping. SSH remotes continue to use SSH keys/configuration.
+The multi-remote panel continues to show the current branch difference against the selected remote:
 
-## Force push to the selected remote
+- `3↑` means 3 commits to push.
+- `2↓` means 2 commits to pull.
+- zero/zero means **Up to date**.
 
-After squashing or rebasing commits from a second remote, choose **Force push...** for that remote. Ordinary Push remains non-forcing.
+The count refreshes after switching remotes and after Fetch, Pull, Push, or Force push.
 
-The confirmation pins both the expected remote commit and the local commit to send and uses an explicit `--force-with-lease`. If the destination changed after confirmation, the operation is rejected instead of silently overwriting newer history. Server-side branch protection and pre-push hooks still apply.
+## Per-remote accounts
+
+Each HTTPS remote can remember its own signed-in account. This makes setups such as `origin -> @work` and `personal -> @personal` work without repeatedly asking which account to use. Fetch, Pull, Push, Force push, background fetches, and the new two-remote synchronization all use the saved mapping.
+
+SSH remotes continue to use SSH keys and configuration.
 
 ## Updating
 
-Windows users on a previous **3.6.7 beta** can receive this release through the fork's automatic updater, or check manually in **Help > About > Check for updates**. Once ready, restart normally or choose **Restart to update**.
+Windows users on an earlier **3.6.7 beta** can receive this release through the automatic updater, or check manually in **Help > About > Check for updates**. Restart normally or choose **Restart to update** when it is ready.
 
 Users on **3.6.6-beta6 or earlier** still need one manual installation of a 3.6.7 beta to enable future Windows updates. macOS and Linux continue to require manual installation or a package-manager update.
 

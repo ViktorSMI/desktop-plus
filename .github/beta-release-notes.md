@@ -1,3 +1,11 @@
+## Binary diff memory hotfix
+
+The binary hex viewer now renders only the selected change group instead of mounting all groups at once. This avoids the excessive DOM allocation that could occur when a binary file contained many separate changes.
+
+Use **Previous** and **Next** to navigate all available groups. Switching files resets the selection before rendering, and scrolling is reset only inside the current viewer. The binary comparison algorithm, loaded-byte limits, and partial-comparison warnings are unchanged.
+
+This fixes the eager-rendering allocation hotspot; it is not a claim that every possible retained-memory leak has been ruled out by profiling.
+
 ## One-click synchronization for two remotes
 
 Repositories with exactly two user-configured remotes can now opt into **Sync both remotes** from **Current branch > Branches**.

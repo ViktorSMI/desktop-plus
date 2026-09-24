@@ -70,6 +70,10 @@ function assertActiveHunk(container: HTMLElement, index: number) {
   assert.equal(container.querySelectorAll('.binary-diff-table').length, 1)
 }
 
+function isButtonDisabled(button: HTMLElement) {
+  return button.getAttribute('aria-disabled') === 'true'
+}
+
 describe('BinaryFile', () => {
   afterEach(() => cleanup())
 
@@ -114,8 +118,8 @@ describe('BinaryFile', () => {
     const previous = getByRole('button', { name: 'Previous' })
     const next = getByRole('button', { name: 'Next' })
 
-    assert.equal(previous.hasAttribute('disabled'), true)
-    assert.equal(next.hasAttribute('disabled'), false)
+    assert.equal(isButtonDisabled(previous), true)
+    assert.equal(isButtonDisabled(next), false)
 
     for (let index = 1; index < 8; index++) {
       fireEvent.click(next)
@@ -124,7 +128,7 @@ describe('BinaryFile', () => {
       assert.ok(getByText(`${index + 1} / 8`))
     }
 
-    assert.equal(next.hasAttribute('disabled'), true)
+    assert.equal(isButtonDisabled(next), true)
 
     for (let index = 6; index >= 0; index--) {
       fireEvent.click(previous)
@@ -132,7 +136,7 @@ describe('BinaryFile', () => {
       assert.equal(container.querySelectorAll('.hex-byte').length, 32)
     }
 
-    assert.equal(previous.hasAttribute('disabled'), true)
+    assert.equal(isButtonDisabled(previous), true)
   })
 
   it('resets before rendering a shorter replacement diff', async () => {
@@ -148,13 +152,10 @@ describe('BinaryFile', () => {
     assertActiveHunk(container, 0)
     assert.ok(getByText('1 / 1'))
     assert.equal(
-      getByRole('button', { name: 'Previous' }).hasAttribute('disabled'),
+      isButtonDisabled(getByRole('button', { name: 'Previous' })),
       true
     )
-    assert.equal(
-      getByRole('button', { name: 'Next' }).hasAttribute('disabled'),
-      true
-    )
+    assert.equal(isButtonDisabled(getByRole('button', { name: 'Next' })), true)
   })
 
   it('handles empty diffs and newly available changes', async () => {
@@ -171,13 +172,10 @@ describe('BinaryFile', () => {
     assert.ok(getByText('0 / 0'))
     assert.ok(getByText('No byte differences found.'))
     assert.equal(
-      getByRole('button', { name: 'Previous' }).hasAttribute('disabled'),
+      isButtonDisabled(getByRole('button', { name: 'Previous' })),
       true
     )
-    assert.equal(
-      getByRole('button', { name: 'Next' }).hasAttribute('disabled'),
-      true
-    )
+    assert.equal(isButtonDisabled(getByRole('button', { name: 'Next' })), true)
 
     rerender(view(createDiff(2)))
 

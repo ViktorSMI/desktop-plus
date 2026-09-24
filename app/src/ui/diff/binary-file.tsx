@@ -25,6 +25,7 @@ interface IBinaryFileProps {
 }
 
 interface IBinaryFileState {
+  readonly diff: IBinaryDiff
   readonly activeHunk: number
 }
 
@@ -59,19 +60,40 @@ function isPrintable(byte: number) {
  *
  * The diff engine performs bounded resynchronization so insertions and
  * deletions don't make the remainder of the file look changed. This component
- * only renders compact context windows around those change regions.
+ * renders only the active change region. Even bounded hunks can otherwise
+ * create millions of byte elements when all of them are mounted at once.
  */
 export class BinaryFile extends React.Component<
   IBinaryFileProps,
   IBinaryFileState
 > {
+  public static getDerivedStateFromProps(
+    props: IBinaryFileProps,
+    state: IBinaryFileState
+  ): IBinaryFileState | null {
+    // Reset before rendering: the new diff may have fewer hunks, or none.
+    return props.diff === state.diff
+      ? null
+      : { diff: props.diff, activeHunk: 0 }
+  }
+
   public state: IBinaryFileState = {
+    diff: this.props.diff,
     activeHunk: 0,
   }
 
+  private readonly tableContainerRef = React.createRef<HTMLDivElement>()
+
   public componentDidUpdate(prevProps: IBinaryFileProps) {
-    if (prevProps.diff !== this.props.diff && this.state.activeHunk !== 0) {
-      this.setState({ activeHunk: 0 })
+    if (prevProps.diff !== this.props.diff) {
+      this.resetScrollPosition()
+    }
+  }
+
+  private resetScrollPosition = () => {
+    const container = this.tableContainerRef.current
+    if (container !== null) {
+      container.scrollTop = 0
     }
   }
 
@@ -88,11 +110,7 @@ export class BinaryFile extends React.Component<
     }
 
     const activeHunk = Math.max(0, Math.min(index, hunkCount - 1))
-    this.setState({ activeHunk }, () => {
-      document
-        .getElementById(`binary-diff-hunk-${activeHunk}`)
-        ?.scrollIntoView({ block: 'center' })
-    })
+    this.setState({ activeHunk }, this.resetScrollPosition)
   }
 
   private previousHunk = () => {
@@ -405,7 +423,17 @@ export class BinaryFile extends React.Component<
           </div>
         ) : null}
 
-        <div className="binary-diff-table-container">
+        {hunkCount > 1 ? (
+          <div className="binary-diff-notice">
+            Showing one grouped change at a time. Use Previous and Next to
+            navigate.
+          </div>
+        ) : null}
+
+        <div
+          className="binary-diff-table-container"
+          ref={this.tableContainerRef}
+        >
           {hunkCount === 0 ? (
             <div className="binary-diff-empty">
               {comparisonTruncated
@@ -424,9 +452,7 @@ export class BinaryFile extends React.Component<
                   <th>ASCII</th>
                 </tr>
               </thead>
-              <tbody>
-                {diff.hunks.map((_, index) => this.renderHunk(index))}
-              </tbody>
+              <tbody>{this.renderHunk(this.state.activeHunk)}</tbody>
             </table>
           )}
         </div>

@@ -457,20 +457,19 @@ export class BranchesContainer extends React.Component<
     }
 
     return (
-      <span
-        className="remote-ahead-behind"
-        aria-label={`${aheadBehind.ahead} commits to push, ${aheadBehind.behind} commits to pull`}
-      >
+      <span className="remote-ahead-behind">
         {aheadBehind.ahead > 0 && (
-          <span title={`${aheadBehind.ahead} commits to push`}>
+          <span>
             {formatCompactNumber(aheadBehind.ahead)}
             <Octicon symbol={octicons.arrowUp} />
+            <span className="remote-ahead-behind-label">to push</span>
           </span>
         )}
         {aheadBehind.behind > 0 && (
-          <span title={`${aheadBehind.behind} commits to pull`}>
+          <span>
             {formatCompactNumber(aheadBehind.behind)}
             <Octicon symbol={octicons.arrowDown} />
+            <span className="remote-ahead-behind-label">to pull</span>
           </span>
         )}
       </span>

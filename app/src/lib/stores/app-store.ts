@@ -113,6 +113,7 @@ import {
 } from '../../models/remote'
 import { IRemoteForcePushRequest } from '../../models/remote-force-push'
 import { clearRemoteAccountLogin } from '../remote-account-preference'
+import { fetch as fetchRepo } from '../git/fetch'
 import {
   prepareRemoteForcePush,
   forcePushToRemote,
@@ -6257,130 +6258,152 @@ export class AppStore extends TypedBaseStore<IAppState> {
 
   private async performSyncRemotes(repository: Repository): Promise<void> {
     return this.withPushPullFetch(repository, async () => {
-      const state = this.repositoryStateCache.get(repository)
-      const tip = state.branchesState.tip
-
-      if (tip.kind !== TipState.Valid) {
-        throw new Error('Check out a local branch before syncing remotes.')
-      }
-
-      const remotes = (await getRemotes(repository)).filter(
-        remote => !remote.name.startsWith(ForkedRemotePrefix)
-      )
-
-      if (remotes.length !== 2) {
-        throw new Error(
-          `Sync both remotes requires exactly two user remotes; found ${remotes.length}.`
-        )
-      }
-
-      const branchName = tip.branch.nameWithoutRemote
       const gitStore = this.gitStoreCache.get(repository)
 
-      this.updatePushPullFetchProgress(repository, {
-        kind: 'fetch',
-        title: 'Syncing remotes',
-        description: 'Fetching both remotes',
-        value: 0,
-      })
+      await gitStore.performFailableOperation(async () => {
+        const state = this.repositoryStateCache.get(repository)
+        const tip = state.branchesState.tip
 
-      await gitStore.fetchRemotes(remotes, false, progress => {
-        this.updatePushPullFetchProgress(repository, {
-          ...progress,
-          title: 'Syncing remotes',
-        })
-      })
+        if (tip.kind !== TipState.Valid) {
+          throw new Error('Check out a local branch before syncing remotes.')
+        }
 
-      const localRef = branchName
-      const refs = [localRef]
-
-      for (const remote of remotes) {
-        const remoteRef = `${remote.name}/${branchName}`
-        const comparison = await getAheadBehind(
-          repository,
-          revSymmetricDifference(localRef, remoteRef)
+        const remotes = (await getRemotes(repository)).filter(
+          remote => !remote.name.startsWith(ForkedRemotePrefix)
         )
 
-        if (comparison !== null) {
-          refs.push(remoteRef)
+        if (remotes.length !== 2) {
+          throw new Error(
+            `Sync both remotes requires exactly two user remotes; found ${remotes.length}.`
+          )
         }
-      }
 
-      let targetRef: string | null = null
+        const branchName = tip.branch.nameWithoutRemote
 
-      // Pick a tip that already contains all known histories. This safely
-      // handles either remote being newer and also a local merge that already
-      // contains commits created independently on both remotes.
-      for (const candidate of refs) {
-        let containsAll = true
+        this.updatePushPullFetchProgress(repository, {
+          kind: 'fetch',
+          title: 'Syncing remotes',
+          description: 'Fetching both remotes',
+          value: 0,
+        })
 
-        for (const other of refs) {
-          if (candidate === other) {
-            continue
-          }
+        // Sync must not continue with stale remote-tracking refs when a fetch
+        // fails. Use the low-level fetch operation here so authentication,
+        // network, and server errors abort before any push can happen.
+        for (let i = 0; i < remotes.length; i++) {
+          const remote = remotes[i]
+          await fetchRepo(
+            repository,
+            remote,
+            progress => {
+              this.updatePushPullFetchProgress(repository, {
+                ...progress,
+                title: 'Syncing remotes',
+                value: (i + progress.value) / remotes.length,
+              })
+            },
+            false
+          )
+        }
 
+        const localRef = branchName
+        const refs = [localRef]
+
+        for (const remote of remotes) {
+          const remoteRef = `${remote.name}/${branchName}`
           const comparison = await getAheadBehind(
             repository,
-            revSymmetricDifference(candidate, other)
+            revSymmetricDifference(localRef, remoteRef)
           )
 
-          if (comparison === null || comparison.behind > 0) {
-            containsAll = false
+          if (comparison !== null) {
+            refs.push(remoteRef)
+          }
+        }
+
+        let targetRef: string | null = null
+
+        // Pick a tip that already contains all known histories. This safely
+        // handles either remote being newer and also a local merge that already
+        // contains commits created independently on both remotes.
+        for (const candidate of refs) {
+          let containsAll = true
+
+          for (const other of refs) {
+            if (candidate === other) {
+              continue
+            }
+
+            const comparison = await getAheadBehind(
+              repository,
+              revSymmetricDifference(candidate, other)
+            )
+
+            if (comparison === null || comparison.behind > 0) {
+              containsAll = false
+              break
+            }
+          }
+
+          if (containsAll) {
+            targetRef = candidate
             break
           }
         }
 
-        if (containsAll) {
-          targetRef = candidate
-          break
+        if (targetRef === null) {
+          throw new Error(
+            `The two remotes contain different commits on '${branchName}'. Merge the divergent histories first, then sync again. Nothing was pushed.`
+          )
         }
-      }
 
-      if (targetRef === null) {
-        throw new Error(
-          `The two remotes contain different commits on '${branchName}'. Merge the divergent histories first, then sync again. Nothing was pushed.`
-        )
-      }
+        if (targetRef !== localRef) {
+          this.updatePushPullFetchProgress(repository, {
+            kind: 'generic',
+            title: 'Syncing remotes',
+            description: `Fast-forwarding ${branchName}`,
+            value: 0.5,
+          })
 
-      if (targetRef !== localRef) {
-        this.updatePushPullFetchProgress(repository, {
-          kind: 'generic',
-          title: 'Syncing remotes',
-          description: `Fast-forwarding ${branchName}`,
-          value: 0.45,
-        })
-
-        await git(
-          ['merge', '--ff-only', targetRef],
-          repository.path,
-          'syncRemotesFastForward'
-        )
-      }
-
-      for (let i = 0; i < remotes.length; i++) {
-        const remote = remotes[i]
-        let aborted = false
-
-        this.updatePushPullFetchProgress(repository, {
-          kind: 'push',
-          title: 'Syncing remotes',
-          description: `Pushing ${branchName} to ${remote.name}`,
-          value: 0.55 + i * 0.2,
-          remote: remote.name,
-          branch: branchName,
-        })
-
-        await pushRepo(repository, remote, branchName, branchName, null, {
-          onHookFailure: this.onHookFailure(() => (aborted = true)),
-        }).catch(error => (aborted ? undefined : Promise.reject(error)))
-
-        if (aborted) {
-          return
+          await git(
+            ['merge', '--ff-only', targetRef],
+            repository.path,
+            'syncRemotesFastForward'
+          )
         }
-      }
 
-      await gitStore.fetchRemotes(remotes, false)
-      await this._refreshRepository(repository)
+        for (let i = 0; i < remotes.length; i++) {
+          const remote = remotes[i]
+          let aborted = false
+
+          this.updatePushPullFetchProgress(repository, {
+            kind: 'push',
+            title: 'Syncing remotes',
+            description: `Pushing ${branchName} to ${remote.name}`,
+            value: 0.6 + i * 0.18,
+            remote: remote.name,
+            branch: branchName,
+          })
+
+          await pushRepo(repository, remote, branchName, branchName, null, {
+            onHookFailure: this.onHookFailure(() => (aborted = true)),
+          }).catch(error => (aborted ? undefined : Promise.reject(error)))
+
+          if (aborted) {
+            return true
+          }
+        }
+
+        // Refresh both tracking refs strictly as well. If a server changed
+        // between the initial fetch and push, a normal push will reject rather
+        // than overwrite it; this final fetch leaves the UI on the server truth.
+        for (const remote of remotes) {
+          await fetchRepo(repository, remote, undefined, false)
+        }
+
+        await this._refreshRepository(repository)
+        return true
+      })
     }).finally(() => this.updatePushPullFetchProgress(repository, null))
   }
 

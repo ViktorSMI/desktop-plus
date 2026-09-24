@@ -6285,6 +6285,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
           title: 'Syncing remotes',
           description: 'Fetching both remotes',
           value: 0,
+          remote: 'both remotes',
         })
 
         // Sync must not continue with stale remote-tracking refs when a fetch

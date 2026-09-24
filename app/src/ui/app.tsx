@@ -4103,6 +4103,9 @@ export class App extends React.Component<IAppProps, IAppState> {
         remoteName={remoteName}
         lastFetched={state.lastFetched}
         networkActionInProgress={state.isPushPullFetchInProgress}
+        syncRemotes={
+          selection.repository.workflowPreferences.syncRemotes === true
+        }
         progress={progress}
         tipState={tip.kind}
         pullWithRebase={pullWithRebase}

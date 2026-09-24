@@ -99,6 +99,7 @@ export class Repository {
       getCustomOverrideHash(this.customEditorOverride),
       this.workflowPreferences.forkContributionTarget,
       this.workflowPreferences.updateBranchStrategy,
+      this.workflowPreferences.syncRemotes,
       this.isTutorialRepository,
       this.overrideLogin
     )

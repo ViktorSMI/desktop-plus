@@ -106,6 +106,12 @@
     }
   }
 
+  .remote-sync-preference {
+    margin-top: var(--spacing-half);
+    color: var(--text-secondary-color);
+    font-size: var(--font-size-sm);
+  }
+
   .remote-switcher-meta {
     display: flex;
     align-items: center;

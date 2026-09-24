@@ -19,4 +19,10 @@ export type WorkflowPreferences = {
    * by merging the default branch in, or by rebasing onto it.
    */
   readonly updateBranchStrategy?: UpdateBranchStrategy
+
+  /**
+   * Keep the two user-configured remotes synchronized through the normal
+   * toolbar network button.
+   */
+  readonly syncRemotes?: boolean
 }

@@ -9,7 +9,7 @@ import { Branch, IAheadBehind } from '../../models/branch'
 import { BranchesTab } from '../../models/branches-tab'
 import { FetchType } from '../../models/fetch'
 import { PopupType } from '../../models/popup'
-import { IRemote } from '../../models/remote'
+import { ForkedRemotePrefix, IRemote } from '../../models/remote'
 import { Account } from '../../models/account'
 
 import { Dispatcher } from '../dispatcher'
@@ -23,6 +23,7 @@ import { Select } from '../lib/select'
 import { Octicon, syncClockwise } from '../octicons'
 import * as octicons from '../octicons/octicons.generated'
 import { Button } from '../lib/button'
+import { Checkbox, CheckboxValue } from '../lib/checkbox'
 
 import { BranchList } from './branch-list'
 import { PullRequestList } from './pull-request-list'
@@ -476,6 +477,16 @@ export class BranchesContainer extends React.Component<
     )
   }
 
+  private get userRemotes() {
+    return this.state.remotes.filter(
+      remote => !remote.name.startsWith(ForkedRemotePrefix)
+    )
+  }
+
+  private get syncRemotesEnabled() {
+    return this.props.repository.workflowPreferences.syncRemotes === true
+  }
+
   private get selectedRemoteAccounts(): ReadonlyArray<Account> {
     const remote = this.selectedRemote
     return remote === null
@@ -553,6 +564,19 @@ export class BranchesContainer extends React.Component<
                 </option>
               ))}
             </Select>
+          </div>
+        )}
+
+        {this.userRemotes.length === 2 && (
+          <div className="remote-sync-preference">
+            <Checkbox
+              value={
+                this.syncRemotesEnabled ? CheckboxValue.On : CheckboxValue.Off
+              }
+              onChange={this.onSyncRemotesChanged}
+              disabled={isBusy}
+              label={`Sync ${this.userRemotes[0].name} ↔ ${this.userRemotes[1].name} with toolbar`}
+            />
           </div>
         )}
 
@@ -659,6 +683,18 @@ export class BranchesContainer extends React.Component<
           </div>
         )}
       </div>
+    )
+  }
+
+  private onSyncRemotesChanged = (
+    event: React.FormEvent<HTMLInputElement>
+  ) => {
+    this.props.dispatcher.updateRepositoryWorkflowPreferences(
+      this.props.repository,
+      {
+        ...this.props.repository.workflowPreferences,
+        syncRemotes: event.currentTarget.checked,
+      }
     )
   }
 

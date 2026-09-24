@@ -50,6 +50,9 @@ interface IPushPullButtonProps {
   /** Is a push/pull/fetch in progress? */
   readonly networkActionInProgress: boolean
 
+  /** Use the normal toolbar button to synchronize the two configured remotes. */
+  readonly syncRemotes: boolean
+
   /** The date of the last fetch. */
   readonly lastFetched: Date | null
 
@@ -294,6 +297,11 @@ export class PushPullButton extends React.Component<
     this.props.dispatcher.push(this.props.repository)
   }
 
+  private syncRemotes = () => {
+    this.closeDropdown()
+    this.props.dispatcher.syncRemotes(this.props.repository)
+  }
+
   /**
    * The dropdown focus trap has logic to set the document.ActiveElement to the
    * html element (in this case the dropdown button) that was clicked to
@@ -475,6 +483,14 @@ export class PushPullButton extends React.Component<
       return this.progressButton(progress, networkActionInProgress)
     }
 
+    if (
+      this.props.syncRemotes &&
+      tipState === TipState.Valid &&
+      remoteName !== null
+    ) {
+      return this.syncRemotesButton()
+    }
+
     if (remoteName === null) {
       return this.publishRepositoryButton(this.push)
     }
@@ -529,6 +545,18 @@ export class PushPullButton extends React.Component<
       numTagsToPush,
       lastFetched,
       this.push
+    )
+  }
+
+  private syncRemotesButton() {
+    return (
+      <ToolbarButton
+        {...this.defaultButtonProps()}
+        title="Sync remotes"
+        description="Fetch and synchronize both remotes"
+        icon={syncClockwise}
+        onClick={this.syncRemotes}
+      />
     )
   }
 

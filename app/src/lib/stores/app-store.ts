@@ -6370,16 +6370,9 @@ export class AppStore extends TypedBaseStore<IAppState> {
           branch: branchName,
         })
 
-        await pushRepo(
-          repository,
-          remote,
-          branchName,
-          branchName,
-          null,
-          {
-            onHookFailure: this.onHookFailure(() => (aborted = true)),
-          }
-        ).catch(error => (aborted ? undefined : Promise.reject(error)))
+        await pushRepo(repository, remote, branchName, branchName, null, {
+          onHookFailure: this.onHookFailure(() => (aborted = true)),
+        }).catch(error => (aborted ? undefined : Promise.reject(error)))
 
         if (aborted) {
           return

@@ -686,9 +686,7 @@ export class BranchesContainer extends React.Component<
     )
   }
 
-  private onSyncRemotesChanged = (
-    event: React.FormEvent<HTMLInputElement>
-  ) => {
+  private onSyncRemotesChanged = (event: React.FormEvent<HTMLInputElement>) => {
     this.props.dispatcher.updateRepositoryWorkflowPreferences(
       this.props.repository,
       {

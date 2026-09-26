@@ -1,0 +1,58 @@
+name: Binary diff performance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.node-version'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'app/src/lib/binary-diff.ts'
+      - 'app/test/fixtures/binary-diff-baseline.ts'
+      - 'app/test/unit/binary-diff-optimized-test.ts'
+      - 'script/benchmark-binary-diff.mjs'
+      - '.github/workflows/binary-diff-performance.yml'
+  pull_request:
+    paths:
+      - '.node-version'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'app/src/lib/binary-diff.ts'
+      - 'app/test/fixtures/binary-diff-baseline.ts'
+      - 'app/test/unit/binary-diff-optimized-test.ts'
+      - 'script/benchmark-binary-diff.mjs'
+      - '.github/workflows/binary-diff-performance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: binary-diff-performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: yarn
+      # This benchmark only needs the root TypeScript dependency. Do not build
+      # Electron or native app dependencies just to time a pure buffer algorithm.
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - name: Require at least fourfold engine speedup
+        run: >-
+          node --expose-gc script/benchmark-binary-diff.mjs --verify
+          --minimum-speedup 4 --json binary-diff-performance.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: binary-diff-performance
+          path: binary-diff-performance.json
+          if-no-files-found: warn

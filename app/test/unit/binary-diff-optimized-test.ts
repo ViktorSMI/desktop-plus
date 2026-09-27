@@ -274,7 +274,7 @@ describe('binary diff optimized search', () => {
         trial % 3 === 0
           ? Buffer.alloc(length, bytes(1 + (next() % 16), next))
           : bytes(length, next)
-      let current = Buffer.from(previous)
+      let current: Buffer = Buffer.from(previous)
       for (let edit = 0; edit < 1 + (trial % 8); edit++) {
         const start = next() % (current.length + 1)
         const size = 1 + (next() % 64)

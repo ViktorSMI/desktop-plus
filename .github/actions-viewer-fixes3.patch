@@ -1,0 +1,26 @@
+--- a/app/test/unit/actions-viewer-test.tsx
++++ b/app/test/unit/actions-viewer-test.tsx
+@@ -166,17 +166,17 @@
+       const load = async () => { calls++; return 'visible' }
+       const view = render(<Probe name="visible" load={load} />)
+       act(() => { context.mock.timers.tick(ActionsPollInterval) })
+-    await flushReact()
++      await flushReact()
+       assert.equal(calls, 0)
+       hidden = false
+-      act(() => { document.dispatchEvent(new Event('visibilitychange') })
+-    await flushReact())
++      act(() => { document.dispatchEvent(new Event('visibilitychange')) })
++      await flushReact()
+       assert.equal(calls, 1)
+       hidden = true
+-      act(() => { document.dispatchEvent(new Event('visibilitychange') })
+-    await flushReact())
++      act(() => { document.dispatchEvent(new Event('visibilitychange')) })
++      await flushReact()
+       act(() => { context.mock.timers.tick(ActionsPollInterval * 10) })
+-    await flushReact()
++      await flushReact()
+       assert.equal(calls, 1)
+       view.unmount()
+     } finally {

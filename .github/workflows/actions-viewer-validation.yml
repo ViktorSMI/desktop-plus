@@ -35,6 +35,8 @@ jobs:
           echo 'b0b8ee23068a8618cb80ecaa52cc0c09fc0b78858accdbe09a6f758e30158f3d  /tmp/actions-viewer-fixes2.patch' | sha256sum -c -
           git apply --check /tmp/actions-viewer-fixes2.patch
           git apply /tmp/actions-viewer-fixes2.patch
+          git apply --check .github/actions-viewer-fixes3.patch
+          git apply .github/actions-viewer-fixes3.patch
           git apply --numstat /tmp/actions-viewer.patch | cut -f3 > /tmp/actions-viewer-files
       - uses: ./.github/actions/setup-ci-environment
         id: setup

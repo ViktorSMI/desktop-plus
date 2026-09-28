@@ -1,0 +1,70 @@
+--- a/app/test/unit/actions-viewer-test.tsx
++++ b/app/test/unit/actions-viewer-test.tsx
+@@ -1,8 +1,9 @@
+ import * as React from 'react'
+ import assert from 'node:assert/strict'
+-import { afterEach, describe, it } from 'node:test'
++import { afterEach, beforeEach, describe, it } from 'node:test'
+ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+ import { act } from 'react-dom/test-utils'
++import { DialogStackContext } from '../../src/ui/dialog'
+ import { ActionsRuns } from '../../src/ui/actions/actions-runs'
+ import { ActionsRunDialog } from '../../src/ui/actions/actions-run-dialog'
+ import { useActionsData, ActionsPollInterval } from '../../src/ui/actions/use-actions-data'
+@@ -27,7 +28,27 @@
+ }
+ 
+ describe('GitHub Actions viewer', () => {
+-  afterEach(() => cleanup())
++  let restoreBridges: (() => void) | undefined
++  beforeEach(async () => {
++    const electron = await import('electron')
++    const send = electron.ipcRenderer.send
++    const prototype = HTMLDialogElement.prototype
++    const showModal = Object.getOwnPropertyDescriptor(prototype, 'showModal')
++    const close = Object.getOwnPropertyDescriptor(prototype, 'close')
++    electron.ipcRenderer.send = () => {}
++    prototype.showModal = function () { this.open = true }
++    prototype.close = function () { this.open = false }
++    restoreBridges = () => {
++      electron.ipcRenderer.send = send
++      for (const [name, descriptor] of [['showModal', showModal], ['close', close]] as const) {
++        if (descriptor === undefined) { Reflect.deleteProperty(prototype, name) }
++        else { Object.defineProperty(prototype, name, descriptor) }
++      }
++    }
++  })
++  afterEach(() => {
++    try { cleanup() } finally { restoreBridges?.(); restoreBridges = undefined }
++  })
+ 
+   it('renders push runs, branch, commit and failure without interpreting workflow text as HTML', async () => {
+     let selected: IActionsRun | null = null
+@@ -53,7 +74,7 @@
+     const urls: string[] = []
+     const attempts: number[] = []
+     const api = reader({ openInBrowser: url => { urls.push(url) }, fetchActionsJobs: async (selected, id, attempt, page) => { attempts.push(attempt); return reader().fetchActionsJobs(selected, id, attempt, page) } })
+-    const view = render(<ActionsRunDialog target={target} runId={123} reader={api} onDismissed={noop} onBack={noop} />)
++    const view = render(<DialogStackContext.Provider value={{ isTopMost: true }}><ActionsRunDialog target={target} runId={123} reader={api} onDismissed={noop} onBack={noop} /></DialogStackContext.Provider>)
+     await view.findByText('Build Linux')
+     assert.ok(view.getByText('1. Compile'))
+     assert.ok(view.getByText(/Attempt 2/))
+--- a/script/check-actions-viewer-layout.mjs
++++ b/script/check-actions-viewer-layout.mjs
+@@ -23,6 +23,7 @@
+   select: 'app/src/ui/lib/select.tsx',
+   topmost: 'app/src/ui/dialog/is-top-most.tsx',
+ }
++const memoizeSource = fs.readFileSync(require.resolve('memoize-one', { paths: [path.join(root, 'app')] }), 'utf8')
+ const factories = Object.entries(sources).map(([name, file]) => {
+   const js = ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), {
+     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
+@@ -48,7 +49,7 @@
+   }
+   await page.addScriptTag({ content: `
+     window.__DARWIN__ = false; window.__WIN32__ = false; window.__LINUX__ = true;
+-    const factories = {${factories.join(',\n')}}; const cache = {}; const noop = () => {}; let unique = 0;
++    const factories = {${factories.join(',\n')}, 'memoize-one': function(require, module, exports) {${memoizeSource}\n}}; const cache = {}; const noop = () => {}; let unique = 0;
+     const ids = { createUniqueId: () => 'actions-' + (++unique), releaseUniqueId: noop };
+     const mocks = {
+       'react': React,

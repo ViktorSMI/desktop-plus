@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      ACTIONS_VIEWER_TEST_OUTPUT: /tmp/actions-viewer-layout
       ISSUE_READER_TEST_OUTPUT: /tmp/issue-reader-layout
     steps:
       - uses: actions/checkout@v7
@@ -49,6 +50,18 @@ jobs:
 
       - name: Test responsive reader and capture screenshots
         run: node script/check-issue-reader-layout.mjs
+
+      - name: Test Actions viewer and capture screenshots
+        run: node script/check-actions-viewer-layout.mjs
+
+      - name: Upload Actions viewer screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: actions-viewer-layout
+          path: ${{ env.ACTIONS_VIEWER_TEST_OUTPUT }}
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Create screenshot gallery
         if: always()

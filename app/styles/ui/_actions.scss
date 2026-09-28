@@ -1,0 +1,205 @@
+.actions-tab,
+.actions-runs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.actions-target,
+.actions-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-half);
+  padding: var(--spacing);
+  border-bottom: var(--base-border);
+
+  .select-component {
+    flex: 1;
+    min-width: 0;
+
+    select {
+      width: 100%;
+      min-width: 0;
+    }
+  }
+}
+
+.actions-target-name,
+.actions-refresh-status,
+.actions-message {
+  padding: var(--spacing-half) var(--spacing);
+  overflow-wrap: anywhere;
+}
+
+.actions-refresh-status,
+.actions-meta {
+  color: var(--text-secondary-color);
+  font-size: var(--font-size-sm);
+}
+
+.actions-target-name {
+  min-width: 0;
+  flex: 1;
+}
+
+.actions-run-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.actions-run {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-half);
+  padding: var(--spacing);
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--text-color);
+  background: var(--background-color);
+  border: 0;
+  border-bottom: var(--base-border);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+
+  &:hover {
+    background: var(--box-alt-background-color);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--text-color);
+    outline-offset: -2px;
+  }
+}
+
+.actions-run-title {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.actions-status {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-transform: capitalize;
+
+  &[data-status='success'] {
+    color: var(--pr-open-icon-color);
+  }
+  &[data-status='failure'],
+  &[data-status='timed_out'] {
+    color: var(--error-color);
+  }
+  &[data-status='in_progress'],
+  &[data-status='queued'],
+  &[data-status='waiting'] {
+    color: var(--text-color);
+  }
+}
+
+.actions-pagination {
+  justify-content: space-between;
+  border-top: var(--base-border);
+}
+
+dialog#actions-run-dialog {
+  box-sizing: border-box;
+  width: min(960px, calc(100vw - 32px));
+  min-width: 0;
+  max-width: calc(100vw - 32px);
+  height: min(800px, calc(100vh - 80px));
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+
+  > form {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+
+    > fieldset {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+  }
+
+  .dialog-header {
+    flex-shrink: 0;
+  }
+  .actions-run-content {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--spacing-double);
+    overflow-wrap: anywhere;
+    user-select: text;
+    overscroll-behavior: contain;
+  }
+  .actions-job {
+    border: var(--base-border);
+    border-radius: 4px;
+    margin-bottom: var(--spacing);
+    padding: var(--spacing);
+
+    summary {
+      cursor: pointer;
+      strong {
+        margin-right: var(--spacing);
+      }
+      span {
+        margin-right: var(--spacing);
+      }
+    }
+  }
+  .actions-steps {
+    list-style: none;
+    padding: 0;
+
+    li {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing);
+      padding: var(--spacing-half) 0;
+      border-top: var(--base-border);
+      > span:first-child {
+        flex: 1 1 200px;
+      }
+    }
+  }
+  .actions-log-link {
+    margin: var(--spacing) 0;
+    font: inherit;
+    color: var(--text-color);
+    background: var(--box-alt-background-color);
+    border: var(--base-border);
+    border-radius: 4px;
+    padding: var(--spacing-half) var(--spacing);
+    cursor: pointer;
+  }
+  .actions-footer {
+    justify-content: space-between;
+  }
+  @media (max-width: 600px), (max-height: 500px) {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    height: calc(100vh - 64px);
+    max-height: calc(100vh - 64px);
+    .actions-run-content {
+      padding: var(--spacing);
+    }
+  }
+}

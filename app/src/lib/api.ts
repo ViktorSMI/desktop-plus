@@ -2888,7 +2888,7 @@ export class API {
    * Make an authenticated request to the client's endpoint with its token.
    * Used for GitHub API requests.
    */
-  private async ghRequest(
+  protected async ghRequest(
     method: HTTPMethod,
     path: string,
     options: {

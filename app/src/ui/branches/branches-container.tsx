@@ -28,6 +28,7 @@ import { Checkbox, CheckboxValue } from '../lib/checkbox'
 import { BranchList } from './branch-list'
 import { PullRequestList } from './pull-request-list'
 import { IssueList } from './issue-list'
+import { ActionsTab } from '../actions/actions-tab'
 import { IssuesStore } from '../../lib/stores/issues-store'
 import { filterBranchesByRemote, IBranchListItem } from './group-branches'
 import { BranchSortOrder } from '../../models/branch-sort-order'
@@ -903,6 +904,7 @@ export class BranchesContainer extends React.Component<
           {this.renderOpenPullRequestsBubble()}
         </span>
         <span id="issues-tab">Issues</span>
+        <span id="actions-tab">Actions</span>
       </TabBar>
     )
   }
@@ -932,6 +934,9 @@ export class BranchesContainer extends React.Component<
           break
         case BranchesTab.PullRequests:
           ariaLabelledBy = 'pull-requests-tab'
+          break
+        case BranchesTab.Actions:
+          ariaLabelledBy = 'actions-tab'
           break
         case BranchesTab.Issues:
           ariaLabelledBy = 'issues-tab'
@@ -1003,6 +1008,13 @@ export class BranchesContainer extends React.Component<
       case BranchesTab.PullRequests: {
         return this.renderPullRequests()
       }
+      case BranchesTab.Actions:
+        return (
+          <ActionsTab
+            repository={this.props.repository}
+            dispatcher={this.props.dispatcher}
+          />
+        )
       case BranchesTab.Issues: {
         return this.renderIssues()
       }

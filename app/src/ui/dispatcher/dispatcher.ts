@@ -1,3 +1,5 @@
+import { ActionsClient } from '../../lib/actions-client'
+import { ActionsRunFilter, IActionsTarget } from '../../models/actions'
 import { Disposable } from 'event-kit'
 
 import {
@@ -1425,6 +1427,40 @@ export class Dispatcher {
   /** Update the repository's issues from GitHub. */
   public refreshIssues(repository: GitHubRepository): Promise<void> {
     return this.appStore._refreshIssues(repository)
+  }
+
+  private actionsClient(target: IActionsTarget) {
+    const account = this.getAccounts().find(
+      a =>
+        a.endpoint === target.endpoint &&
+        a.login === target.login &&
+        (a.apiType === 'dotcom' || a.apiType === 'enterprise')
+    )
+    if (account === undefined) {
+      throw new Error('The selected GitHub account is no longer signed in')
+    }
+    return new ActionsClient(account.endpoint, account.token, account.login)
+  }
+
+  public async fetchActionsRuns(
+    target: IActionsTarget,
+    page: number,
+    status: ActionsRunFilter
+  ) {
+    return this.actionsClient(target).runs(target, page, status)
+  }
+
+  public async fetchActionsRun(target: IActionsTarget, id: number) {
+    return this.actionsClient(target).run(target, id)
+  }
+
+  public async fetchActionsJobs(
+    target: IActionsTarget,
+    id: number,
+    attempt: number,
+    page: number
+  ) {
+    return this.actionsClient(target).jobs(target, id, attempt, page)
   }
 
   /** Fetch an issue body and its comments for read-only viewing. */

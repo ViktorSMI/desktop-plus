@@ -1,3 +1,4 @@
+import { ActionsRunDialog } from './actions/actions-run-dialog'
 import * as Path from 'path'
 import * as React from 'react'
 import { IssueDetailDialog } from './branches/issue-detail-dialog'
@@ -2696,6 +2697,17 @@ export class App extends React.Component<IAppProps, IAppState> {
             onUpdateCommitOptions={this.onUpdateCommitOptions}
           />
         )
+      case PopupType.ActionsRun:
+        return (
+          <ActionsRunDialog
+            key={`actions-${popup.target.endpoint}-${popup.target.owner}-${popup.target.name}-${popup.target.login}-${popup.runId}`}
+            target={popup.target}
+            runId={popup.runId}
+            reader={this.props.dispatcher}
+            onDismissed={onPopupDismissedFn}
+            onBack={this.onBackToActions}
+          />
+        )
       case PopupType.IssueDetail:
         return (
           <IssueDetailDialog
@@ -4520,6 +4532,11 @@ export class App extends React.Component<IAppProps, IAppState> {
         signInState={this.state.signInState}
       />
     )
+  }
+
+  private onBackToActions = () => {
+    this.props.dispatcher.closePopup()
+    this.props.dispatcher.showFoldout({ type: FoldoutType.Branch })
   }
 
   public render() {

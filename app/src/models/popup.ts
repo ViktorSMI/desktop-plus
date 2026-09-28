@@ -1,3 +1,4 @@
+import { IActionsTarget } from './actions'
 import {
   Repository,
   RepositoryWithGitHubRepository,
@@ -107,6 +108,7 @@ export enum PopupType {
   TestNotifications = 'TestNotifications',
   PullRequestComment = 'PullRequestComment',
   IssueDetail = 'IssueDetail',
+  ActionsRun = 'ActionsRun',
   UnknownAuthors = 'UnknownAuthors',
   TestIcons = 'TestIcons',
   ConfirmRestart = 'ConfirmRestart',
@@ -147,6 +149,7 @@ interface IBasePopup {
 }
 
 export type PopupDetail =
+  | { type: PopupType.ActionsRun; target: IActionsTarget; runId: number }
   | {
       type: PopupType.IssueDetail
       repository: GitHubRepository

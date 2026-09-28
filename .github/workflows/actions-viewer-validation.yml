@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 concurrency:
   group: actions-viewer-validation
@@ -21,11 +20,6 @@ jobs:
       RELEASE_CHANNEL: ''
       ACTIONS_VIEWER_TEST_OUTPUT: /tmp/actions-viewer-validation/screenshots
     steps:
-      - name: Stop superseded validation run
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api --method POST repos/${{ github.repository }}/actions/runs/36489143147/cancel || true
       - uses: actions/checkout@v7
         with:
           submodules: recursive
@@ -37,14 +31,19 @@ jobs:
           echo '27aa0b96d37700cbe6efe56d646696dcf3318fcc55995b35e5a97509efa4526e  /tmp/actions-viewer.patch' | sha256sum -c -
           git apply --check /tmp/actions-viewer.patch
           git apply /tmp/actions-viewer.patch
-          git apply --check .github/actions-viewer-fixes.patch
-          git apply .github/actions-viewer-fixes.patch
+          cat .github/actions-viewer-fixes2.part{1,2} | gzip -dc > /tmp/actions-viewer-fixes2.patch
+          echo 'b0b8ee23068a8618cb80ecaa52cc0c09fc0b78858accdbe09a6f758e30158f3d  /tmp/actions-viewer-fixes2.patch' | sha256sum -c -
+          git apply --check /tmp/actions-viewer-fixes2.patch
+          git apply /tmp/actions-viewer-fixes2.patch
           git apply --numstat /tmp/actions-viewer.patch | cut -f3 > /tmp/actions-viewer-files
       - uses: ./.github/actions/setup-ci-environment
         id: setup
         with:
           node-version: 24.19.0
           arch: x64
+      - name: Prepare native test dependencies
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: yarn test:setup
       - name: Format changed files
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: |

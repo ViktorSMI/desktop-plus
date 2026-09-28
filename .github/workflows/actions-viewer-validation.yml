@@ -6,20 +6,93 @@ on:
       - feature/actions-viewer
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  source:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      RELEASE_CHANNEL: ''
+      ACTIONS_VIEWER_TEST_OUTPUT: /tmp/actions-viewer-validation/screenshots
     steps:
       - uses: actions/checkout@v7
         with:
-          persist-credentials: false
-      - name: Export tracked source for isolated validation
-        run: git archive --format=zip --output=source.zip HEAD
-      - uses: actions/upload-artifact@v7
+          submodules: recursive
+      - name: Apply reviewed feature patch
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/actions-viewer-validation
+          cat .github/actions-viewer-patch.part{1,2,3,4} | gzip -dc > /tmp/actions-viewer.patch
+          echo '27aa0b96d37700cbe6efe56d646696dcf3318fcc55995b35e5a97509efa4526e  /tmp/actions-viewer.patch' | sha256sum -c -
+          git apply --check /tmp/actions-viewer.patch
+          git apply /tmp/actions-viewer.patch
+          git apply --numstat /tmp/actions-viewer.patch | cut -f3 > /tmp/actions-viewer-files
+      - uses: ./.github/actions/setup-ci-environment
+        id: setup
         with:
-          name: actions-viewer-source
-          path: source.zip
-          retention-days: 1
+          node-version: 24.19.0
+          arch: x64
+      - name: Format changed files
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          grep -E '\.(tsx?|mjs|scss|ya?ml)$' /tmp/actions-viewer-files | xargs node_modules/.bin/prettier --write
+      - name: Run Actions client and React regression tests
+        id: focused
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          node script/test.mjs app/test/unit/actions-client-test.ts app/test/unit/actions-viewer-test.tsx 2>&1 | tee /tmp/actions-viewer-validation/focused-tests.txt
+      - name: Lint and validate changelog
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          yarn lint 2>&1 | tee /tmp/actions-viewer-validation/lint.txt
+          yarn validate-changelog
+      - name: Compile production app
+        id: compile
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          yarn compile:prod 2>&1 | tee /tmp/actions-viewer-validation/compile.txt
+      - name: Run script tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          yarn test:script 2>&1 | tee /tmp/actions-viewer-validation/script-tests.txt
+      - name: Install test browser
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Check responsive Actions viewer
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          node script/check-actions-viewer-layout.mjs 2>&1 | tee /tmp/actions-viewer-validation/browser-tests.txt
+      - name: Commit validated source to validation branch only
+        if: ${{ success() }}
+        run: |
+          set -euo pipefail
+          git config user.name ViktorSMI
+          git config user.email 31064630+ViktorSMI@users.noreply.github.com
+          xargs -d '\n' git add -- < /tmp/actions-viewer-files
+          git diff --cached --check
+          git commit -m 'feat: add read-only GitHub Actions monitor with scoped refresh and tests'
+          git push origin HEAD:refs/heads/feature/actions-viewer-validated
+          git rev-parse HEAD | tee /tmp/actions-viewer-validation/validated-commit.txt
+          git rev-parse HEAD^{tree} | tee /tmp/actions-viewer-validation/validated-tree.txt
+      - name: Export source and diagnostics
+        if: ${{ always() }}
+        run: |
+          mkdir -p /tmp/actions-viewer-validation
+          if [ -f /tmp/actions-viewer-files ]; then
+            xargs -d '\n' git add -N -- < /tmp/actions-viewer-files
+            git diff --binary "$GITHUB_SHA" -- $(cat /tmp/actions-viewer-files) > /tmp/actions-viewer-validation/feature.patch
+            tar -czf /tmp/actions-viewer-validation/feature-source.tar.gz -T /tmp/actions-viewer-files
+          fi
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: actions-viewer-validation
+          path: /tmp/actions-viewer-validation
+          retention-days: 3
           if-no-files-found: error

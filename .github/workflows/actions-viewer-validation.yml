@@ -1,0 +1,25 @@
+name: Actions viewer validation
+
+on:
+  push:
+    branches:
+      - feature/actions-viewer
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Export tracked source for isolated validation
+        run: git archive --format=zip --output=source.zip HEAD
+      - uses: actions/upload-artifact@v7
+        with:
+          name: actions-viewer-source
+          path: source.zip
+          retention-days: 1
+          if-no-files-found: error

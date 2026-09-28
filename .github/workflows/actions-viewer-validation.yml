@@ -49,7 +49,9 @@ jobs:
       - name: Format changed files
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: |
-          grep -E '\.(tsx?|mjs|scss|ya?ml)$' /tmp/actions-viewer-files | xargs node_modules/.bin/prettier --write
+          for pass in 1 2; do
+            grep -E '\.(tsx?|mjs|scss|ya?ml)$' /tmp/actions-viewer-files | xargs node_modules/.bin/prettier --write
+          done
       - name: Run Actions client and React regression tests
         id: focused
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}

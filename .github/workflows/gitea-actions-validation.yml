@@ -1,0 +1,118 @@
+name: Gitea Actions validation
+
+on:
+  push:
+    branches:
+      - feature/gitea-actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gitea-actions-validation
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RELEASE_CHANNEL: ''
+      ACTIONS_VIEWER_TEST_OUTPUT: /tmp/gitea-validation/screenshots
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Apply feature for isolated validation
+        id: patch
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gitea-validation
+          cat .github/gitea-actions.part{1,2,3,4,5,6} | gzip -dc > /tmp/gitea.patch
+          echo '2bd7c8a5212d08fd0c76fda42083f538da121fee805bd4b32ce918750224faea  /tmp/gitea.patch' | sha256sum -c -
+          git apply --check /tmp/gitea.patch
+          git apply /tmp/gitea.patch
+          git apply --numstat /tmp/gitea.patch | cut -f3 > /tmp/gitea-files
+      - uses: ./.github/actions/setup-ci-environment
+        id: setup
+        with:
+          node-version: 24.19.0
+          arch: x64
+      - name: Prepare native UI tests
+        run: yarn test:setup
+      - name: Format feature source
+        run: |
+          for pass in 1 2; do
+            grep -E '\.(tsx?|mjs|scss|ya?ml)$' /tmp/gitea-files | xargs node_modules/.bin/prettier --write
+            node_modules/.bin/prettier --write .github/workflows/gitea-actions-validation.yml
+          done
+      - name: Run GitHub and Gitea regression tests
+        id: tests
+        run: |
+          set -o pipefail
+          timeout 180s node script/test.mjs app/test/unit/actions-client-test.ts app/test/unit/actions-viewer-test.tsx app/test/unit/gitea-actions-client-test.ts --test-timeout=20000 2>&1 | tee /tmp/gitea-validation/tests.txt
+      - name: Lint and changelog
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        id: lint
+        run: |
+          set -o pipefail
+          yarn lint 2>&1 | tee /tmp/gitea-validation/lint.txt
+          yarn validate-changelog
+      - name: Compile production app and check types
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        id: compile
+        run: |
+          set -o pipefail
+          yarn compile:prod 2>&1 | tee /tmp/gitea-validation/compile.txt
+      - name: Run script tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        id: scripts
+        run: |
+          set -o pipefail
+          yarn test:script 2>&1 | tee /tmp/gitea-validation/script-tests.txt
+      - name: Install test browser
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Check GitHub and Gitea responsive viewers
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        id: browser
+        run: |
+          set -o pipefail
+          timeout 180s node script/check-actions-viewer-layout.mjs 2>&1 | tee /tmp/gitea-validation/browser.txt
+      - name: Store verified source blobs without publishing a branch or release
+        if: ${{ success() && steps.tests.outcome == 'success' && steps.lint.outcome == 'success' && steps.compile.outcome == 'success' && steps.scripts.outcome == 'success' && steps.browser.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import base64, hashlib, json, os, subprocess
+          from pathlib import Path
+          entries = []
+          for name in Path('/tmp/gitea-files').read_text().splitlines():
+              content = Path(name).read_bytes()
+              payload = json.dumps({'content': base64.b64encode(content).decode(), 'encoding': 'base64'})
+              result = subprocess.run(['gh', 'api', '--method', 'POST', 'repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/blobs', '--input', '-'], input=payload, capture_output=True, text=True, check=True)
+              sha = json.loads(result.stdout)['sha']
+              expected = hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest()
+              if sha != expected:
+                  raise SystemExit('Source blob mismatch: ' + name)
+              entries.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': sha})
+          Path('/tmp/gitea-validation/verified-blobs.json').write_text(json.dumps(entries, indent=2))
+      - name: Export source and diagnostics
+        if: always()
+        run: |
+          mkdir -p /tmp/gitea-validation
+          if [ -f /tmp/gitea-files ]; then
+            xargs -d '\n' git add -N -- < /tmp/gitea-files
+            git diff --check
+            git diff --binary -- $(cat /tmp/gitea-files) > /tmp/gitea-validation/feature.patch
+            tar -czf /tmp/gitea-validation/feature-source.tar.gz -T /tmp/gitea-files
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gitea-actions-validation
+          path: /tmp/gitea-validation
+          retention-days: 7
+          if-no-files-found: error

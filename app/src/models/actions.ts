@@ -1,5 +1,7 @@
-/** Read-only GitHub Actions data. Never store an account token in UI state. */
+/** Read-only Actions data. Never store an account token in UI state. */
+export type ActionsProvider = 'github' | 'gitea'
 export interface IActionsTarget {
+  readonly provider: ActionsProvider
   readonly endpoint: string
   readonly owner: string
   readonly name: string
@@ -11,14 +13,15 @@ export interface IActionsRun {
   readonly name: string | null
   readonly display_title: string
   readonly run_number: number
-  readonly run_attempt: number
+  readonly run_attempt: number | null
   readonly head_branch: string | null
   readonly head_sha: string
   readonly event: string
   readonly status: string | null
   readonly conclusion: string | null
-  readonly created_at: string
-  readonly updated_at: string
+  readonly created_at: string | null
+  readonly updated_at: string | null
+  readonly started_at?: string | null
   readonly actor: { readonly login: string } | null
 }
 
@@ -39,14 +42,18 @@ export interface IActionsJob {
   readonly started_at: string | null
   readonly completed_at: string | null
   readonly steps?: ReadonlyArray<IActionsStep>
+  /** Untrusted provider URL; validate before opening it. */
+  readonly html_url?: string | null
 }
 
 export interface IActionsRunsPage {
+  readonly hasNextPage?: boolean
   readonly total_count: number
   readonly workflow_runs: ReadonlyArray<IActionsRun>
 }
 
 export interface IActionsJobsPage {
+  readonly hasNextPage?: boolean
   readonly total_count: number
   readonly jobs: ReadonlyArray<IActionsJob>
 }
@@ -69,7 +76,7 @@ export interface IActionsReader {
   fetchActionsJobs(
     target: IActionsTarget,
     id: number,
-    attempt: number,
+    attempt: number | null,
     page: number
   ): Promise<IActionsJobsPage>
   openInBrowser(url: string): Promise<unknown> | void

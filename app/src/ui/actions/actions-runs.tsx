@@ -7,6 +7,7 @@ import {
 } from '../../models/actions'
 import {
   actionsStatus,
+  actionsWebURL,
   actionsTargetKey,
   ActionsRunsPerPage,
 } from '../../lib/actions-client'
@@ -32,7 +33,8 @@ export function ActionsRuns({ target, reader, onSelect }: IActionsRunsProps) {
   const result = useActionsData(
     `${actionsTargetKey(target)}:${page}:${status}`,
     load,
-    pollRuns
+    pollRuns,
+    target.provider
   )
   const onStatusChanged = React.useCallback(
     (event: React.FormEvent<HTMLSelectElement>) => {
@@ -57,16 +59,20 @@ export function ActionsRuns({ target, reader, onSelect }: IActionsRunsProps) {
     },
     [result.data, onSelect]
   )
+  const openActions = React.useCallback(() => {
+    reader.openInBrowser(actionsWebURL(target))
+  }, [reader, target])
   const runs = result.data?.workflow_runs ?? []
   // GitHub caps filtered searches at 1,000 results. Do not offer unreachable pages.
   const count = Math.min(
     result.data?.total_count ?? 0,
-    status === '' ? Infinity : 1000
+    status === '' || target.provider === 'gitea' ? Infinity : 1000
   )
 
   return (
     <div className="actions-runs">
       <div className="actions-toolbar">
+        <Button onClick={openActions}>Open Actions in browser</Button>
         <Select label="Run status" value={status} onChange={onStatusChanged}>
           <option value="">All runs</option>
           <option value="in_progress">In progress</option>
@@ -139,7 +145,7 @@ export function ActionsRuns({ target, reader, onSelect }: IActionsRunsProps) {
             result.loading ||
             result.error !== null ||
             runs.length === 0 ||
-            page * ActionsRunsPerPage >= count
+            !(result.data?.hasNextPage ?? page * ActionsRunsPerPage < count)
           }
           onClick={nextPage}
         >

@@ -10,6 +10,9 @@ import {
   actionsStatus,
   actionsTargetKey,
   actionsWebURL,
+  actionsRunWebURL,
+  actionsJobWebURL,
+  actionsProviderName,
   ActionsJobsPerPage,
 } from '../../lib/actions-client'
 import { Dialog, DialogPreferredFocusClassName } from '../dialog'
@@ -53,7 +56,8 @@ export function ActionsRunDialog({
   const result = useActionsData(
     `${actionsTargetKey(target)}:${runId}:${page}`,
     load,
-    pollRun
+    pollRun,
+    target.provider
   )
   const previousPage = React.useCallback(
     () => setPage(p => Math.max(1, p - 1)),
@@ -61,18 +65,27 @@ export function ActionsRunDialog({
   )
   const nextPage = React.useCallback(() => setPage(p => p + 1), [])
   const openRun = React.useCallback(() => {
-    reader.openInBrowser(actionsWebURL(target, runId))
-  }, [reader, target, runId])
+    reader.openInBrowser(
+      result.data === null
+        ? actionsWebURL(
+            target,
+            target.provider === 'github' ? runId : undefined
+          )
+        : actionsRunWebURL(target, result.data.run)
+    )
+  }, [reader, target, runId, result.data])
   const openJob = React.useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       const id = Number(event.currentTarget.dataset.jobId)
-      if (result.data?.page.jobs.some(job => job.id === id)) {
-        reader.openInBrowser(actionsWebURL(target, runId, id))
+      const job = result.data?.page.jobs.find(job => job.id === id)
+      if (result.data !== null && job !== undefined) {
+        reader.openInBrowser(actionsJobWebURL(target, result.data.run, job))
       }
     },
     [reader, target, runId, result.data]
   )
   const run = result.data?.run
+  const runTime = run?.created_at ?? run?.started_at ?? null
   const jobs = result.data?.page.jobs ?? []
   const total = result.data?.page.total_count ?? 0
 
@@ -81,7 +94,7 @@ export function ActionsRunDialog({
       id="actions-run-dialog"
       title={
         run === undefined
-          ? 'GitHub Actions'
+          ? `${actionsProviderName(target.provider)} Actions`
           : `${run.name ?? 'Workflow'} #${run.run_number}`
       }
       onDismissed={onDismissed}
@@ -126,7 +139,10 @@ export function ActionsRunDialog({
             <p className="actions-meta">
               {run.head_branch ?? 'Detached HEAD'} ·{' '}
               <code>{run.head_sha.slice(0, 7)}</code> · {run.event} ·{' '}
-              {run.actor?.login ?? 'Unknown actor'} · Attempt {run.run_attempt}
+              {run.actor?.login ?? 'Unknown actor'} ·{' '}
+              {run.run_attempt === null
+                ? 'Latest jobs (server does not report run attempts)'
+                : `Attempt ${run.run_attempt}`}
             </p>
             <p>
               <span
@@ -135,16 +151,21 @@ export function ActionsRunDialog({
               >
                 {actionsStatus(run.status, run.conclusion)}
               </span>{' '}
-              · Created{' '}
-              <time dateTime={run.created_at}>
-                {new Date(run.created_at).toLocaleString()}
-              </time>
+              {runTime !== null && (
+                <>
+                  {' '}
+                  · {run.created_at !== null ? 'Created' : 'Started'}{' '}
+                  <time dateTime={runTime}>
+                    {new Date(runTime).toLocaleString()}
+                  </time>
+                </>
+              )}
             </p>
             <h3>Jobs ({total})</h3>
             {jobs.length === 0 && (
               <p>
-                No jobs on this page. The run may be waiting for a runner or
-                approval.
+                No jobs on this page. Open the run in your browser to check
+                runner availability, approval, or server API support.
               </p>
             )}
             <div className="actions-jobs" key={`${run.id}:${run.run_attempt}`}>
@@ -175,7 +196,10 @@ export function ActionsRunDialog({
                     Open job logs in browser
                   </button>
                   {(job.steps?.length ?? 0) === 0 ? (
-                    <p>Steps are not available yet.</p>
+                    <p>
+                      No step details returned by the server. Open job logs in
+                      the browser.
+                    </p>
                   ) : (
                     <ol className="actions-steps">
                       {job.steps?.map(step => (
@@ -215,7 +239,9 @@ export function ActionsRunDialog({
             result.loading ||
             result.error !== null ||
             jobs.length === 0 ||
-            page * ActionsJobsPerPage >= total
+            !(
+              result.data?.page.hasNextPage ?? page * ActionsJobsPerPage < total
+            )
           }
           onClick={nextPage}
         >
@@ -223,7 +249,9 @@ export function ActionsRunDialog({
         </Button>
       </div>
       <div className="actions-toolbar actions-footer">
-        <span>Read only · Logs open on GitHub</span>
+        <span>
+          Read only · Logs open on {actionsProviderName(target.provider)}
+        </span>
         <Button onClick={onBack}>Back to Actions</Button>
       </div>
     </Dialog>

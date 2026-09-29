@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { actionsErrorMessage } from '../../lib/actions-client'
+import { ActionsProvider } from '../../models/actions'
 
 export const ActionsPollInterval = 30000
 
@@ -15,7 +16,8 @@ interface IActionsData<T> {
 export function useActionsData<T>(
   key: string,
   load: () => Promise<T>,
-  shouldPoll: (data: T) => boolean
+  shouldPoll: (data: T) => boolean,
+  provider: ActionsProvider = 'github'
 ) {
   const [state, setState] = React.useState<IActionsData<T>>({
     key,
@@ -72,7 +74,7 @@ export function useActionsData<T>(
           setState(old => ({
             ...old,
             loading: false,
-            error: actionsErrorMessage(error),
+            error: actionsErrorMessage(error, provider),
           }))
         }
         // Stop on HTTP/network failures, including rate limits. Retry is explicit.
@@ -95,7 +97,7 @@ export function useActionsData<T>(
       document.removeEventListener('visibilitychange', onVisibilityChanged)
       requestRefresh.current = () => {}
     }
-  }, [key, load, shouldPoll])
+  }, [key, load, shouldPoll, provider])
 
   // Even before effects run, a different repository/account/page cannot show
   // private data or a late response belonging to the previous target.

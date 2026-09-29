@@ -36,6 +36,9 @@ function RepositoryActionsTab({ repository, dispatcher }: IActionsTabProps) {
   )
   const [remoteName, setRemoteName] = React.useState('')
   const [accountLogin, setAccountLogin] = React.useState<string | null>(null)
+  const [accountEndpoint, setAccountEndpoint] = React.useState<string | null>(
+    null
+  )
   const [loading, setLoading] = React.useState(true)
   const [failed, setFailed] = React.useState(false)
   const [revision, setRevision] = React.useState(0)
@@ -67,6 +70,7 @@ function RepositoryActionsTab({ repository, dispatcher }: IActionsTabProps) {
           }))
         )
         setRemoteName(selected?.name ?? '')
+        setAccountEndpoint(null)
         setAccountLogin(
           selected === undefined
             ? null
@@ -93,24 +97,36 @@ function RepositoryActionsTab({ repository, dispatcher }: IActionsTabProps) {
     () =>
       remote === undefined
         ? null
-        : getActionsTarget(repository, remote, accounts, accountLogin),
-    [repository, remote, accounts, accountLogin]
+        : getActionsTarget(
+            repository,
+            remote,
+            accounts,
+            accountLogin,
+            accountEndpoint
+          ),
+    [repository, remote, accounts, accountLogin, accountEndpoint]
   )
   const onRemoteChanged = React.useCallback(
     (event: React.FormEvent<HTMLSelectElement>) => {
       const name = event.currentTarget.value
       setRemoteName(name)
+      setAccountEndpoint(null)
       setAccountLogin(getRemoteAccountLogin(repository.path, name))
     },
     [repository.path]
   )
   const onAccountChanged = React.useCallback(
     (event: React.FormEvent<HTMLSelectElement>) => {
-      const login = event.currentTarget.value
-      setAccountLogin(login)
-      setRemoteAccountLogin(repository.path, remoteName, login)
+      const selected = candidates.find(
+        a => JSON.stringify([a.endpoint, a.login]) === event.currentTarget.value
+      )
+      if (selected !== undefined) {
+        setAccountLogin(selected.login)
+        setAccountEndpoint(selected.endpoint)
+        setRemoteAccountLogin(repository.path, remoteName, selected.login)
+      }
     },
-    [repository.path, remoteName]
+    [repository.path, remoteName, candidates]
   )
   const onSelect = React.useCallback(
     (run: IActionsRun) => {
@@ -153,16 +169,23 @@ function RepositoryActionsTab({ repository, dispatcher }: IActionsTabProps) {
             </Select>
             {candidates.length > 0 && (
               <Select
-                label="GitHub account"
-                value={target?.login ?? ''}
+                label="Actions account"
+                value={
+                  target === null
+                    ? ''
+                    : JSON.stringify([target.endpoint, target.login])
+                }
                 onChange={onAccountChanged}
               >
                 <option value="" disabled={true}>
                   Choose an account
                 </option>
                 {candidates.map(a => (
-                  <option key={`${a.endpoint}:${a.login}`} value={a.login}>
-                    {a.login}
+                  <option
+                    key={`${a.endpoint}:${a.login}`}
+                    value={JSON.stringify([a.endpoint, a.login])}
+                  >
+                    {a.login} · {a.endpoint}
                   </option>
                 ))}
               </Select>
@@ -171,10 +194,10 @@ function RepositoryActionsTab({ repository, dispatcher }: IActionsTabProps) {
           {target === null ? (
             <p className="actions-message">
               {remote === undefined
-                ? 'Add a GitHub remote to view Actions.'
+                ? 'Add a GitHub or Gitea remote to view Actions.'
                 : candidates.length === 0
-                ? 'Select a GitHub remote and sign in to its GitHub or GitHub Enterprise account. Actions from other hosting providers are not supported.'
-                : 'Choose a GitHub account for this remote.'}
+                ? 'Select a GitHub or Gitea remote and sign in to its account. Gitea Actions requires Gitea 1.25 or later; other hosting providers are not supported.'
+                : 'Choose an account and server for this remote.'}
             </p>
           ) : (
             <>

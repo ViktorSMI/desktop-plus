@@ -5211,6 +5211,28 @@ export class ForgejoAPI extends API {
  * OAuth application) differs.
  */
 export class GiteaAPI extends ForgejoAPI {
+  /** Read-only Actions API, using this account's existing token refresh lock. */
+  public async fetchActionsResource(path: string): Promise<Response> {
+    const match =
+      /^repos\/([^/]+)\/([^/]+)\/actions\/runs(?:\/[1-9]\d*(?:\/(?:attempts\/[1-9]\d*\/)?jobs)?)?(?:\?[^#]*)?$/.exec(
+        path
+      )
+    if (
+      match === null ||
+      match.slice(1).some(part => {
+        const decoded = decodeURIComponent(part)
+        return decoded === '.' || decoded === '..' || /[\/\\?#]/.test(decoded)
+      })
+    ) {
+      throw new Error('Invalid read-only Gitea Actions path')
+    }
+    const response = await this.request(this.endpoint, 'GET', path, {
+      reloadCache: true,
+    })
+    this.checkTokenInvalidated(response)
+    return response
+  }
+
   protected override get apiType(): RegisteredApiType {
     return 'gitea'
   }

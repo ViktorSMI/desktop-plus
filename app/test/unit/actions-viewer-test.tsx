@@ -19,6 +19,7 @@ import {
 } from '../../src/models/actions'
 
 const target: IActionsTarget = {
+  provider: 'github',
   endpoint: 'https://api.github.com',
   owner: 'ViktorSMI',
   name: 'desktop-plus',
@@ -106,7 +107,7 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-describe('GitHub Actions viewer', () => {
+describe('GitHub and Gitea Actions viewer', () => {
   let restoreBridges: (() => void) | undefined
   beforeEach(async () => {
     const electron = await import('electron')
@@ -188,7 +189,7 @@ describe('GitHub Actions viewer', () => {
   })
   it('shows jobs, steps, attempt and links to job logs in a read-only dialog', async () => {
     const urls: string[] = []
-    const attempts: number[] = []
+    const attempts: (number | null)[] = []
     const api = reader({
       openInBrowser: url => {
         urls.push(url)
@@ -223,6 +224,86 @@ describe('GitHub Actions viewer', () => {
     assert.equal(
       view.queryByRole('button', { name: /re-run|cancel run/i }),
       null
+    )
+  })
+  it('shows Gitea limitations honestly and opens repository run numbers, not database ids', async () => {
+    const urls: string[] = []
+    const gitea: IActionsTarget = {
+      ...target,
+      provider: 'gitea',
+      endpoint: 'https://gitea.test/prefix/api/v1',
+    }
+    const giteaRun: IActionsRun = {
+      ...run,
+      run_attempt: null,
+      created_at: null,
+      updated_at: null,
+      started_at: null,
+    }
+    const view = render(
+      <DialogStackContext.Provider value={{ isTopMost: true }}>
+        <ActionsRunDialog
+          target={gitea}
+          runId={123}
+          reader={reader({
+            fetchActionsRun: async () => giteaRun,
+            openInBrowser: url => {
+              urls.push(url)
+            },
+          })}
+          onDismissed={noop}
+          onBack={noop}
+        />
+      </DialogStackContext.Provider>
+    )
+    await view.findByText('Build Linux')
+    assert.ok(view.getByText(/server does not report run attempts/))
+    assert.equal(view.queryByText(/Attempt 1/), null)
+    assert.equal(view.container.querySelector('time'), null)
+    assert.ok(view.getByText('Read only · Logs open on Gitea'))
+    fireEvent.click(view.getByRole('button', { name: 'Open run in browser' }))
+    fireEvent.click(
+      view.getByRole('button', { name: 'Open job logs in browser' })
+    )
+    assert.deepEqual(urls, [
+      'https://gitea.test/prefix/ViktorSMI/desktop-plus/actions/runs/8',
+      'https://gitea.test/prefix/ViktorSMI/desktop-plus/actions/runs/8',
+    ])
+  })
+  it('uses provider pagination metadata instead of assuming GitHub page sizes', async () => {
+    const pages: number[] = []
+    const api = reader({
+      fetchActionsJobs: async (selected, id, attempt, page) => {
+        pages.push(page)
+        const data = await reader().fetchActionsJobs(
+          selected,
+          id,
+          attempt,
+          page
+        )
+        return { ...data, total_count: 51, hasNextPage: page === 1 }
+      },
+    })
+    const view = render(
+      <DialogStackContext.Provider value={{ isTopMost: true }}>
+        <ActionsRunDialog
+          target={{ ...target, provider: 'gitea' }}
+          runId={123}
+          reader={api}
+          onDismissed={noop}
+          onBack={noop}
+        />
+      </DialogStackContext.Provider>
+    )
+    await view.findByText('Build Linux')
+    fireEvent.click(view.getByRole('button', { name: 'Next jobs' }))
+    await waitFor(() => assert.deepEqual(pages, [1, 2]))
+    await flushReact()
+    assert.equal(
+      view
+        .getByRole('button', { name: 'Next jobs' })
+        .getAttribute('aria-disabled'),
+      'true'
     )
   })
   it('ignores a previous target response even when it finishes last', async () => {

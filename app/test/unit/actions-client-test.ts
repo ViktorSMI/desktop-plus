@@ -15,6 +15,7 @@ import { Repository } from '../../src/models/repository'
 import { IActionsTarget } from '../../src/models/actions'
 
 const target: IActionsTarget = {
+  provider: 'github',
   endpoint: 'https://api.github.com',
   owner: 'ViktorSMI',
   name: 'desktop-plus',

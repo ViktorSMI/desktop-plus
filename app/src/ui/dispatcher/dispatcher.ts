@@ -1,4 +1,4 @@
-import { ActionsClient } from '../../lib/actions-client'
+import { createActionsClient } from '../../lib/actions-client'
 import { ActionsRunFilter, IActionsTarget } from '../../models/actions'
 import { Disposable } from 'event-kit'
 
@@ -1434,12 +1434,14 @@ export class Dispatcher {
       a =>
         a.endpoint === target.endpoint &&
         a.login === target.login &&
-        (a.apiType === 'dotcom' || a.apiType === 'enterprise')
+        (target.provider === 'gitea'
+          ? a.apiType === 'gitea'
+          : a.apiType === 'dotcom' || a.apiType === 'enterprise')
     )
     if (account === undefined) {
-      throw new Error('The selected GitHub account is no longer signed in')
+      throw new Error('The selected Actions account is no longer signed in')
     }
-    return new ActionsClient(account.endpoint, account.token, account.login)
+    return createActionsClient(account, target)
   }
 
   public async fetchActionsRuns(
@@ -1457,7 +1459,7 @@ export class Dispatcher {
   public async fetchActionsJobs(
     target: IActionsTarget,
     id: number,
-    attempt: number,
+    attempt: number | null,
     page: number
   ) {
     return this.actionsClient(target).jobs(target, id, attempt, page)

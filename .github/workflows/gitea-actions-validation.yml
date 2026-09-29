@@ -33,6 +33,17 @@ jobs:
           echo '2bd7c8a5212d08fd0c76fda42083f538da121fee805bd4b32ce918750224faea  /tmp/gitea.patch' | sha256sum -c -
           git apply --check /tmp/gitea.patch
           git apply /tmp/gitea.patch
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/src/lib/actions-client.ts')
+          source = path.read_text()
+          start = source.index('/** Keep Gitea OAuth refresh state')
+          end = source.index('export function actionsTargetKey', start)
+          factory = source[start:end]
+          source = source[:start] + source[end:]
+          insert = source.index('export function actionsErrorMessage')
+          path.write_text(source[:insert] + factory + source[insert:])
+          PY
           git apply --numstat /tmp/gitea.patch | cut -f3 > /tmp/gitea-files
       - uses: ./.github/actions/setup-ci-environment
         id: setup

@@ -69,7 +69,7 @@ describe('commit Actions status', () => {
       ]).state,
       'failure'
     )
-  }
+  })
   for (const conclusion of ['cancelled', 'stale', null, 'future_state']) {
     it(`never treats ${conclusion} as success`, () => {
       assert.equal(

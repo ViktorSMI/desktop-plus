@@ -25,7 +25,8 @@ export interface ICommitActionsRun {
 
 export const UnavailableCommitActions: ICommitActionsSummary = {
   state: 'unknown',
-  description: 'Actions status unavailable. Check your connection and account access.',
+  description:
+    'Actions status unavailable. Check your connection and account access.',
   count: 0,
 }
 
@@ -44,7 +45,11 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 function integer(value: unknown, minimum: number): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < minimum
+  ) {
     throw new Error('Invalid Actions identifier or count')
   }
   return value
@@ -71,16 +76,19 @@ export function parseCommitActionsPage(body: unknown, sha: string) {
     // Workflow names need not be unique. Without a stable identity, retain
     // each run rather than potentially hiding a failure from another workflow.
     const workflow =
-      typeof run.workflow_id === 'number' || typeof run.workflow_id === 'string'
+      (typeof run.workflow_id === 'number' &&
+        Number.isSafeInteger(run.workflow_id) && run.workflow_id > 0) ||
+      (typeof run.workflow_id === 'string' && run.workflow_id !== '' && run.workflow_id !== '0')
         ? `id:${run.workflow_id}`
         : text(run.path) !== ''
-          ? `path:${text(run.path).split('@')[0]}`
-          : `run:${id}`
+        ? `path:${text(run.path).split('@')[0]}`
+        : `run:${id}`
     return {
       id,
-      attempt: run.run_attempt == null || run.run_attempt === 0
-        ? 1
-        : integer(run.run_attempt, 1),
+      attempt:
+        run.run_attempt == null || run.run_attempt === 0
+          ? 1
+          : integer(run.run_attempt, 1),
       workflow,
       event: text(run.event),
       branch: text(run.head_branch),
@@ -129,16 +137,29 @@ export function summarizeCommitActions(
       (run.id === previous.id && run.attempt > previous.attempt)
     ) {
       latest.set(key, run)
+    } else if (
+      run.id === previous.id && run.attempt === previous.attempt &&
+      (run.status !== previous.status || run.conclusion !== previous.conclusion)
+    ) {
+      // Pagination can race an in-flight update. Conflicting snapshots of the
+      // same attempt must not produce green until the next consistent refresh.
+      latest.set(key, { ...run, status: 'unknown', conclusion: null })
     }
   }
   const states = Array.from(latest.values(), runState)
   const count = states.length
   const state: CommitActionsState =
-    count === 0 ? 'none' :
-    states.includes('failure') ? 'failure' :
-    states.includes('pending') ? 'pending' :
-    states.includes('unknown') ? 'unknown' :
-    states.includes('success') ? 'success' : 'neutral'
+    count === 0
+      ? 'none'
+      : states.includes('failure')
+      ? 'failure'
+      : states.includes('pending')
+      ? 'pending'
+      : states.includes('unknown')
+      ? 'unknown'
+      : states.includes('success')
+      ? 'success'
+      : 'neutral'
   const descriptions: Record<CommitActionsState, string> = {
     none: 'No Actions runs for this commit',
     failure: 'Actions failed or require attention',
@@ -149,7 +170,8 @@ export function summarizeCommitActions(
   }
   return {
     state,
-    description: descriptions[state] + (count === 0 ? '' : ` (${count} workflows)`),
+    description:
+      descriptions[state] + (count === 0 ? '' : ` (${count} workflows)`),
     count,
   }
 }

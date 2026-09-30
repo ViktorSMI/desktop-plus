@@ -37,9 +37,19 @@ function subscribeToStatus(
   const key = actionsTargetKey(target)
   let entry = pool.get(key)
   if (entry === undefined) {
-    const client = new CommitActionsClient(account.endpoint, account.token, account.login)
-    const store = new CommitActionsStore(sha => client.forCommit(account, target, sha))
-    entry = { store, timer: setInterval(() => store.refreshDue(), 30000), subscribers: 0 }
+    const client = new CommitActionsClient(
+      account.endpoint,
+      account.token,
+      account.login
+    )
+    const store = new CommitActionsStore(sha =>
+      client.forCommit(account, target, sha)
+    )
+    entry = {
+      store,
+      timer: setInterval(() => store.refreshDue(), 30000),
+      subscribers: 0,
+    }
     pool.set(key, entry)
   }
   entry.subscribers++
@@ -64,13 +74,21 @@ interface IBadgeProps {
 }
 
 /** Shape and accessible label supplement color, including on selected rows. */
-export function CommitActionsStatusBadge({ value, repositoryName }: IBadgeProps) {
+export function CommitActionsStatusBadge({
+  value,
+  repositoryName,
+}: IBadgeProps) {
   if (value.state === 'none') {
     return null
   }
-  const color = value.state === 'failure' ? '#d1242f' :
-    value.state === 'pending' ? '#d97706' :
-    value.state === 'success' ? '#1a7f37' : '#6e7781'
+  const color =
+    value.state === 'failure'
+      ? '#d1242f'
+      : value.state === 'pending'
+      ? '#d97706'
+      : value.state === 'success'
+      ? '#1a7f37'
+      : '#6e7781'
   const label = `${repositoryName}: ${value.description}`
   return (
     <TooltippedContent tagName="span" tooltip={label}>
@@ -83,9 +101,21 @@ export function CommitActionsStatusBadge({ value, repositoryName }: IBadgeProps)
         aria-label={label}
         style={{ display: 'block', flexShrink: 0 }}
       >
-        <circle cx="8" cy="8" r="7" fill={color} stroke="white" strokeWidth="1" />
+        <circle
+          cx="8"
+          cy="8"
+          r="7"
+          fill={color}
+          stroke="white"
+          strokeWidth="1"
+        />
         {value.state === 'success' ? (
-          <path d="M4.5 8l2.2 2.2 4.8-4.8" fill="none" stroke="white" strokeWidth="1.6" />
+          <path
+            d="M4.5 8l2.2 2.2 4.8-4.8"
+            fill="none"
+            stroke="white"
+            strokeWidth="1.6"
+          />
         ) : value.state === 'failure' ? (
           <path d="M5 5l6 6M11 5l-6 6" stroke="white" strokeWidth="1.6" />
         ) : value.state === 'pending' ? (
@@ -104,7 +134,10 @@ interface IObservedProps {
 }
 
 /** Only visible, mounted rows in a visible window subscribe to the shared poll. */
-export function ObservedCommitActionsStatus({ subscribe, repositoryName }: IObservedProps) {
+export function ObservedCommitActionsStatus({
+  subscribe,
+  repositoryName,
+}: IObservedProps) {
   const ref = React.useRef<HTMLSpanElement>(null)
   const [snapshot, setSnapshot] = React.useState<{
     readonly subscribe: CommitActionsSubscribe
@@ -132,11 +165,13 @@ export function ObservedCommitActionsStatus({ subscribe, repositoryName }: IObse
         })
       }
     }
-    const observer = typeof IntersectionObserver === 'undefined' ? undefined :
-      new IntersectionObserver(entries => {
-        intersecting = entries.some(entry => entry.isIntersecting)
-        update()
-      })
+    const observer =
+      typeof IntersectionObserver === 'undefined'
+        ? undefined
+        : new IntersectionObserver(entries => {
+            intersecting = entries.some(entry => entry.isIntersecting)
+            update()
+          })
     observer?.observe(element)
     document.addEventListener('visibilitychange', update)
     update()
@@ -154,11 +189,20 @@ export function ObservedCommitActionsStatus({ subscribe, repositoryName }: IObse
     <span
       ref={ref}
       className="commit-actions-status"
-      style={{ display: 'inline-flex', width: 20, height: 20, flexShrink: 0,
-        alignItems: 'center', justifyContent: 'center' }}
+      style={{
+        display: 'inline-flex',
+        width: 20,
+        height: 16,
+        flexShrink: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
     >
       {value !== undefined && (
-        <CommitActionsStatusBadge value={value} repositoryName={repositoryName} />
+        <CommitActionsStatusBadge
+          value={value}
+          repositoryName={repositoryName}
+        />
       )}
     </span>
   )
@@ -170,7 +214,11 @@ interface IStatusProps {
   readonly sha: string
 }
 
-export function CommitActionsStatus({ gitHubRepository, accounts, sha }: IStatusProps) {
+export function CommitActionsStatus({
+  gitHubRepository,
+  accounts,
+  sha,
+}: IStatusProps) {
   const resolved = commitActionsTarget(gitHubRepository, accounts)
   const account = resolved?.account
   const target = resolved?.target

@@ -30,6 +30,7 @@ import { Emoji } from '../../lib/emoji'
 import { enableAccessibleListToolTips } from '../../lib/feature-flag'
 import { TooltippedContent } from '../lib/tooltipped-content'
 import { formatDate } from '../../lib/format-date'
+import { CommitActionsStatus } from './commit-actions-status'
 
 interface ICommitProps {
   readonly gitHubRepository: GitHubRepository | null
@@ -219,11 +220,16 @@ export class CommitListItem extends React.PureComponent<
     const tagIndicator = renderCommitListItemTags(this.props.commit.tags)
     const unpushedIndicator = this.renderUnpushedIndicator()
 
-    if (tagIndicator || unpushedIndicator) {
+    if (tagIndicator || unpushedIndicator || this.props.gitHubRepository !== null) {
       return (
         <div className="commit-indicators">
           {tagIndicator}
           {unpushedIndicator}
+          <CommitActionsStatus
+            gitHubRepository={this.props.gitHubRepository}
+            accounts={this.props.accounts}
+            sha={this.props.commit.sha}
+          />
         </div>
       )
     }

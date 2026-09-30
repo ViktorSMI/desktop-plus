@@ -1,0 +1,52 @@
+name: Commit Actions status validation
+
+on:
+  push:
+    branches: [work/commit-action-status]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RELEASE_CHANNEL: ''
+      DESKTOP_FORK_UPDATES: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: '24.19.0'
+          arch: x64
+      - name: Format changed feature files and record formatting-only patch
+        run: |
+          mkdir validation
+          files=(app/src/lib/commit-actions.ts app/src/lib/commit-actions-client.ts app/src/lib/stores/commit-actions-store.ts app/src/ui/history/commit-actions-status.tsx app/src/ui/history/commit-list-item.tsx app/test/unit/commit-actions-test.ts app/test/unit/commit-actions-store-test.ts app/test/unit/commit-actions-client-test.ts app/test/unit/commit-actions-status-test.tsx)
+          ./node_modules/.bin/prettier --write "${files[@]}" .github/workflows/commit-action-status-validation.yml
+          git diff -- "${files[@]}" > validation/formatting.patch
+          sha256sum "${files[@]}" > validation/feature-sha256.txt
+      - name: Test commit Actions model, transport, polling and React UI
+        run: node script/test.mjs app/test/unit/commit-actions-test.ts app/test/unit/commit-actions-store-test.ts app/test/unit/commit-actions-client-test.ts app/test/unit/commit-actions-status-test.tsx | tee validation/tests.log
+      - name: Lint and validate changelog
+        if: ${{ !cancelled() }}
+        run: |
+          yarn lint
+          yarn validate-changelog
+      - name: Compile production app and check project types
+        if: ${{ !cancelled() }}
+        run: yarn compile:prod
+      - name: Save validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: commit-actions-validation
+          path: validation/
+          retention-days: 7

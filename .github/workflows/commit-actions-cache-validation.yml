@@ -10,14 +10,17 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        timeout-minutes: 5
         with:
-          fetch-depth: 2
-          submodules: recursive
+          fetch-depth: 3
           persist-credentials: false
+      - name: Check out pinned public submodules
+        timeout-minutes: 5
+        run: git submodule update --init --recursive --depth=1
       - uses: ./.github/actions/setup-ci-environment
         with:
           node-version: '24.19.0'

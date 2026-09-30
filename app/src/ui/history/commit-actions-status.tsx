@@ -1,72 +1,28 @@
 import * as React from 'react'
 import { Account } from '../../models/account'
 import { GitHubRepository } from '../../models/github-repository'
-import { IActionsTarget } from '../../models/actions'
 import { actionsTargetKey } from '../../lib/actions-client'
 import {
   CommitActionsClient,
   commitActionsTarget,
 } from '../../lib/commit-actions-client'
 import { ICommitActionsSummary } from '../../lib/commit-actions'
-import { CommitActionsStore } from '../../lib/stores/commit-actions-store'
+import { CommitActionsPool } from '../../lib/stores/commit-actions-pool'
 import { TooltippedContent } from '../lib/tooltipped-content'
 
 type Listener = (value: ICommitActionsSummary | undefined) => void
 export type CommitActionsSubscribe = (listener: Listener) => () => void
-interface IPoolEntry {
-  readonly store: CommitActionsStore
-  readonly timer: ReturnType<typeof setInterval>
-  subscribers: number
-}
 
-// Account identity scopes caches across logins/token replacement; credentials
-// are never placed in cache keys, React state, tooltips or DOM attributes.
-const pools = new WeakMap<Account, Map<string, IPoolEntry>>()
-
-function subscribeToStatus(
-  account: Account,
-  target: IActionsTarget,
-  sha: string,
-  listener: Listener
-) {
-  let pool = pools.get(account)
-  if (pool === undefined) {
-    pool = new Map()
-    pools.set(account, pool)
-  }
-  const key = actionsTargetKey(target)
-  let entry = pool.get(key)
-  if (entry === undefined) {
-    const client = new CommitActionsClient(
-      account.endpoint,
-      account.token,
-      account.login
-    )
-    const store = new CommitActionsStore(sha =>
-      client.forCommit(account, target, sha)
-    )
-    entry = {
-      store,
-      timer: setInterval(() => store.refreshDue(), 30000),
-      subscribers: 0,
-    }
-    pool.set(key, entry)
-  }
-  entry.subscribers++
-  const unsubscribe = entry.store.subscribe(sha, listener)
-  return () => {
-    unsubscribe()
-    entry!.subscribers--
-    if (entry!.subscribers === 0) {
-      clearInterval(entry!.timer)
-      entry!.store.dispose()
-      pool!.delete(key)
-      if (pool!.size === 0) {
-        pools.delete(account)
-      }
-    }
-  }
-}
+// The cache belongs to the account/repository, not to a virtual row or a layout.
+// Credentials remain inside the existing account/client, never in cache keys.
+const statusPool = new CommitActionsPool((account: Account, target, sha) => {
+  const client = new CommitActionsClient(
+    account.endpoint,
+    account.token,
+    account.login
+  )
+  return client.forCommit(account, target, sha)
+})
 
 interface IBadgeProps {
   readonly value: ICommitActionsSummary
@@ -131,12 +87,14 @@ export function CommitActionsStatusBadge({
 interface IObservedProps {
   readonly subscribe: CommitActionsSubscribe
   readonly repositoryName: string
+  readonly getSnapshot?: () => ICommitActionsSummary | undefined
 }
 
 /** Only visible, mounted rows in a visible window subscribe to the shared poll. */
 export function ObservedCommitActionsStatus({
   subscribe,
   repositoryName,
+  getSnapshot,
 }: IObservedProps) {
   const ref = React.useRef<HTMLSpanElement>(null)
   const [snapshot, setSnapshot] = React.useState<{
@@ -183,8 +141,10 @@ export function ObservedCommitActionsStatus({
     }
   }, [subscribe])
 
-  // A recycled virtual row must never flash the previous commit's green badge.
-  const value = snapshot?.subscribe === subscribe ? snapshot.value : undefined
+  // Hydrate a remounted row synchronously, before IntersectionObserver runs.
+  // A new SHA/account uses its own cache; never flash the recycled row's badge.
+  const value = getSnapshot?.() ??
+    (snapshot?.subscribe === subscribe ? snapshot.value : undefined)
   return (
     <span
       ref={ref}
@@ -223,15 +183,23 @@ export function CommitActionsStatus({
   const account = resolved?.account
   const target = resolved?.target
   const key = target === undefined ? '' : actionsTargetKey(target)
-  const subscribe = React.useMemo<CommitActionsSubscribe | undefined>(() => {
+  React.useEffect(() => statusPool.retainAccounts(accounts), [accounts])
+  const source = React.useMemo(() => {
     if (account === undefined || target === undefined) {
       return undefined
     }
-    return listener => subscribeToStatus(account, target, sha, listener)
-  }, [account, key, sha])
-  return subscribe === undefined || target === undefined ? null : (
+    return {
+      subscribe: (listener: Listener) => statusPool.subscribe(account, target, sha, listener),
+      getSnapshot: () => statusPool.getSnapshot(account, target, sha),
+    }
+    // Profile updates can reconstruct Account objects. Depend on identity and
+    // credentials, not object references; token replacement still invalidates.
+  }, [account?.id, account?.apiType, account?.endpoint, account?.login,
+      account?.token, account?.refreshToken, key, sha])
+  return source === undefined || target === undefined ? null : (
     <ObservedCommitActionsStatus
-      subscribe={subscribe}
+      subscribe={source.subscribe}
+      getSnapshot={source.getSnapshot}
       repositoryName={`${target.owner}/${target.name}`}
     />
   )

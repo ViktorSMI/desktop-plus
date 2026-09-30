@@ -1,0 +1,70 @@
+name: Commit Actions cache validation
+
+on:
+  push:
+    branches:
+      - work/commit-actions-cache-fix
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          submodules: recursive
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: '24.19.0'
+          arch: x64
+      - name: Format candidate sources and save exact tested files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p cache-validation
+          FILES=(app/src/lib/stores/commit-actions-pool.ts app/src/lib/stores/commit-actions-store.ts app/src/ui/history/commit-actions-status.tsx app/test/unit/commit-actions-pool-test.ts app/test/unit/commit-actions-cache-test.tsx)
+          yarn prettier --write "${FILES[@]}"
+          for file in "${FILES[@]}"; do
+            mkdir -p "cache-validation/source/$(dirname "$file")"
+            cp "$file" "cache-validation/source/$file"
+            echo "$(git hash-object "$file") $file" >> cache-validation/tested-blobs.txt
+          done
+          git diff --binary > cache-validation/formatting.patch
+      - name: Verify new regressions fail on the original UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=app/src/ui/history/commit-actions-status.tsx
+          cp "$FILE" /tmp/candidate-status.tsx
+          trap 'cp /tmp/candidate-status.tsx "$FILE"' EXIT
+          git show 1012f194860c293fdff152e704f4f90aeb5e635a:"$FILE" > "$FILE"
+          if env -u GITHUB_ACTIONS node script/test.mjs --test-name-pattern='renders the remembered circle|does not recreate subscriptions|does not reload when' app/test/unit/commit-actions-cache-test.tsx > cache-validation/before-tests.log 2>&1; then
+            echo 'Regression tests did not detect the old cache bug' >&2
+            exit 1
+          fi
+          grep -E 'fail [1-9][0-9]*' cache-validation/before-tests.log
+      - name: Test cache and all existing commit Actions behavior
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node script/test.mjs app/test/unit/commit-actions-test.ts app/test/unit/commit-actions-client-test.ts app/test/unit/commit-actions-store-test.ts app/test/unit/commit-actions-status-test.tsx app/test/unit/commit-actions-pool-test.ts app/test/unit/commit-actions-cache-test.tsx | tee cache-validation/tests.log
+      - name: Lint and validate changelog
+        if: ${{ !cancelled() }}
+        run: yarn lint && yarn validate-changelog
+      - name: Production compilation and project typecheck
+        if: ${{ !cancelled() }}
+        run: yarn compile:prod
+      - name: Save validation evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: commit-actions-cache-validation
+          path: cache-validation
+          if-no-files-found: error
+          retention-days: 7

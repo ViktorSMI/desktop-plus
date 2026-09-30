@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v7
         timeout-minutes: 5
         with:
-          fetch-depth: 4
+          fetch-depth: 16
           submodules: recursive
           persist-credentials: false
       - uses: ./.github/actions/setup-ci-environment

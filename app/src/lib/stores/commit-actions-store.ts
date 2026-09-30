@@ -23,14 +23,19 @@ export class CommitActionsStore {
     private readonly now: () => number = Date.now
   ) {}
 
+  /** Last known result, including while a due refresh is in flight. No I/O. */
+  public getSnapshot(sha: string) {
+    return this.entries.get(sha)?.value
+  }
+
   public subscribe(sha: string, listener: Listener) {
     if (this.disposed) {
       throw new Error('Commit Actions store has been disposed')
     }
     let entry = this.entries.get(sha)
     if (entry === undefined) {
-      // Evict only inactive rows. An active result must remain available to all
-      // consumers; leaving history disposes the entire cache.
+      // Evict only inactive rows. The target pool bounds the cache lifetime
+      // independently from the short lifetime of virtualized rows.
       for (const [key, item] of this.entries) {
         if (this.entries.size < 128) {
           break
@@ -45,8 +50,10 @@ export class CommitActionsStore {
         expires: 0,
         pending: false,
       }
-      this.entries.set(sha, entry)
     }
+    // Recently viewed commits survive a scroll through older history (LRU).
+    this.entries.delete(sha)
+    this.entries.set(sha, entry)
     if (this.now() < this.cooldownUntil) {
       entry.value = UnavailableCommitActions
       entry.expires = this.cooldownUntil

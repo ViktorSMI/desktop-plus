@@ -16,11 +16,9 @@ jobs:
       - uses: actions/checkout@v7
         timeout-minutes: 5
         with:
-          fetch-depth: 3
+          fetch-depth: 4
+          submodules: recursive
           persist-credentials: false
-      - name: Check out pinned public submodules
-        timeout-minutes: 5
-        run: git submodule update --init --recursive --depth=1
       - uses: ./.github/actions/setup-ci-environment
         with:
           node-version: '24.19.0'
@@ -31,14 +29,22 @@ jobs:
           set -euo pipefail
           mkdir -p cache-validation
           FILES=(app/src/lib/stores/commit-actions-pool.ts app/src/lib/stores/commit-actions-store.ts app/src/ui/history/commit-actions-status.tsx app/test/unit/commit-actions-pool-test.ts app/test/unit/commit-actions-cache-test.tsx)
-          yarn prettier --write "${FILES[@]}"
+          node node_modules/prettier/bin-prettier.js --write "${FILES[@]}"
           for file in "${FILES[@]}"; do
             mkdir -p "cache-validation/source/$(dirname "$file")"
             cp "$file" "cache-validation/source/$file"
             echo "$(git hash-object "$file") $file" >> cache-validation/tested-blobs.txt
           done
           git diff --binary > cache-validation/formatting.patch
+      - name: Test cache and all existing commit Actions behavior
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          node script/test.mjs app/test/unit/commit-actions-test.ts app/test/unit/commit-actions-client-test.ts app/test/unit/commit-actions-store-test.ts app/test/unit/commit-actions-status-test.tsx app/test/unit/commit-actions-pool-test.ts app/test/unit/commit-actions-cache-test.tsx 2>&1 | tee cache-validation/tests.log
       - name: Verify new regressions fail on the original UI
+        if: ${{ !cancelled() }}
+        timeout-minutes: 3
         shell: bash
         run: |
           set -euo pipefail
@@ -46,17 +52,11 @@ jobs:
           cp "$FILE" /tmp/candidate-status.tsx
           trap 'cp /tmp/candidate-status.tsx "$FILE"' EXIT
           git show 1012f194860c293fdff152e704f4f90aeb5e635a:"$FILE" > "$FILE"
-          if env -u GITHUB_ACTIONS node script/test.mjs --test-name-pattern='renders the remembered circle|does not recreate subscriptions|does not reload when' app/test/unit/commit-actions-cache-test.tsx > cache-validation/before-tests.log 2>&1; then
-            echo 'Regression tests did not detect the old cache bug' >&2
-            exit 1
-          fi
-          grep -E 'fail [1-9][0-9]*' cache-validation/before-tests.log
-      - name: Test cache and all existing commit Actions behavior
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          node script/test.mjs app/test/unit/commit-actions-test.ts app/test/unit/commit-actions-client-test.ts app/test/unit/commit-actions-store-test.ts app/test/unit/commit-actions-status-test.tsx app/test/unit/commit-actions-pool-test.ts app/test/unit/commit-actions-cache-test.tsx | tee cache-validation/tests.log
+          CODE=0
+          timeout 120s env -u GITHUB_ACTIONS node script/test.mjs --test-name-pattern='renders the remembered circle|does not recreate subscriptions|does not reload when' app/test/unit/commit-actions-cache-test.tsx > cache-validation/before-tests.log 2>&1 || CODE=$?
+          cat cache-validation/before-tests.log
+          test "$CODE" -eq 1
+          grep -E 'fail 3$' cache-validation/before-tests.log
       - name: Lint and validate changelog
         if: ${{ !cancelled() }}
         run: yarn lint && yarn validate-changelog

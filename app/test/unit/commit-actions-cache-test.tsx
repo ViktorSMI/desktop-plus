@@ -161,7 +161,8 @@ describe('commit status cache through actual React row lifecycle', () => {
           ...repository,
         } as GitHubRepository)
       )
-      assert.equal(view.container.querySelector('svg'), svg)
+      // Avoid inspecting cyclic React/jsdom trees if this identity check fails.
+      assert.ok(view.container.querySelector('svg') === svg, 'The cached badge DOM node must be retained')
     }
     assert.equal(observers.length, 1)
     assert.equal(read.mock.callCount(), 1)

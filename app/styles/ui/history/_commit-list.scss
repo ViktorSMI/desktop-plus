@@ -148,6 +148,7 @@
     flex-flow: nowrap row;
     flex: 1 1 auto;
     justify-content: flex-end;
+    align-items: center;
     margin-left: var(--spacing);
     color: var(--list-item-badge-color);
     height: 16px;
@@ -179,13 +180,18 @@
       }
     }
 
+    // The final indicator always occupies the same centered 24px column.
+    // Actions comes before the push arrow, so an empty Actions slot cannot
+    // shift an unpushed commit left. When both exist, keep both side by side.
     .unpushed-indicator {
-      flex: 0 0 auto;
+      display: inline-flex;
+      flex: 0 0 24px;
+      align-items: center;
+      justify-content: center;
       height: 100%;
       border-radius: 8px;
-      padding: 0 var(--spacing-half);
+      padding: 0;
       background: var(--list-item-badge-background-color);
-      margin-left: var(--spacing-half);
     }
   }
 

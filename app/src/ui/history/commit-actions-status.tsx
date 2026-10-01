@@ -152,7 +152,7 @@ export function ObservedCommitActionsStatus({
       className="commit-actions-status"
       style={{
         display: 'inline-flex',
-        width: 20,
+        width: 24,
         height: 16,
         flexShrink: 0,
         alignItems: 'center',

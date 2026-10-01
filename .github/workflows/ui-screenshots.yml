@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 20
     env:
       ACTIONS_VIEWER_TEST_OUTPUT: /tmp/actions-viewer-layout
+      HISTORY_INDICATOR_TEST_OUTPUT: /tmp/history-indicator-layout
       ISSUE_READER_TEST_OUTPUT: /tmp/issue-reader-layout
     steps:
       - uses: actions/checkout@v7
@@ -53,6 +54,18 @@ jobs:
 
       - name: Test Actions viewer and capture screenshots
         run: node script/check-actions-viewer-layout.mjs
+
+      - name: Test History indicator alignment and cached remounts
+        run: node script/check-history-indicator-layout.mjs
+
+      - name: Upload History indicator screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: history-indicator-layout
+          path: ${{ env.HISTORY_INDICATOR_TEST_OUTPUT }}
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload Actions viewer screenshots
         if: always()

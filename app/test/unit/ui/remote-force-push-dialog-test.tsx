@@ -40,13 +40,13 @@ function renderDialog(targeted = true) {
       preferenceChanges++
     },
   } as unknown as Dispatcher
-  render(
+  const element = (remoteRequest: IRemoteForcePushRequest | undefined) => (
     <DialogStackContext.Provider value={{ isTopMost: true }}>
       <ConfirmForcePush
         dispatcher={dispatcher}
         repository={new Repository('/test/project', -1, null, false)}
         upstreamBranch={targeted ? 'gitea/main' : 'origin/main'}
-        remoteRequest={targeted ? request : undefined}
+        remoteRequest={remoteRequest}
         askForConfirmationOnForcePush={false}
         onDismissed={() => {
           dismissals++
@@ -54,7 +54,10 @@ function renderDialog(targeted = true) {
       />
     </DialogStackContext.Provider>
   )
+  const view = render(element(targeted ? request : undefined))
   return {
+    rerenderRequest: (next: IRemoteForcePushRequest) =>
+      view.rerender(element(next)),
     pushed,
     counts: () => ({ normalPushes, dismissals, preferenceChanges }),
   }
@@ -139,12 +142,86 @@ describe('remote force push confirmation', () => {
       name: 'Force push',
       exact: true,
     })
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'gitea/main' },
+    })
     fireEvent.click(button)
     fireEvent.click(button)
     await waitFor(() => assert.equal(view.pushed.length, 1))
     assert.equal(view.pushed[0], request)
     assert.equal(view.counts().normalPushes, 0)
     assert.equal(view.counts().preferenceChanges, 0)
+  })
+
+  it('requires the exact destination and blocks direct form submission without it', () => {
+    const view = renderDialog()
+    const input = screen.getByRole('textbox', {
+      name: 'To confirm, type gitea/main',
+    })
+    const button = screen.getByRole('button', {
+      name: 'Force push',
+      exact: true,
+    })
+    const form = button.closest('form')
+    assert.ok(form)
+    for (const value of [
+      '',
+      'main',
+      'origin/main',
+      'gitea/Main',
+      ' gitea/main',
+      'gitea/main ',
+    ]) {
+      fireEvent.change(input, { target: { value } })
+      assert.equal(button.getAttribute('aria-disabled'), 'true')
+      fireEvent.click(button)
+      fireEvent.submit(form)
+      assert.equal(view.pushed.length, 0)
+      assert.equal(view.counts().dismissals, 0)
+    }
+    fireEvent.change(input, { target: { value: 'gitea/main' } })
+    assert.notEqual(button.getAttribute('aria-disabled'), 'true')
+    fireEvent.change(input, { target: { value: '' } })
+    assert.equal(button.getAttribute('aria-disabled'), 'true')
+  })
+
+  it('invalidates typed consent when the approved snapshot changes, even on the same branch', () => {
+    const view = renderDialog()
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'gitea/main' },
+    })
+    const next = {
+      ...request,
+      lease: { ...request.lease, localTip: 'c'.repeat(40) },
+    }
+    view.rerenderRequest(next)
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    const button = screen.getByRole('button', {
+      name: 'Force push',
+      exact: true,
+    })
+    assert.equal(input.value, '')
+    assert.equal(button.getAttribute('aria-disabled'), 'true')
+    const form = button.closest('form')
+    assert.ok(form)
+    fireEvent.submit(form)
+    assert.equal(view.pushed.length, 0)
+    fireEvent.change(input, { target: { value: 'gitea/main' } })
+    fireEvent.click(button)
+    assert.deepEqual(view.pushed, [next])
+  })
+
+  it('Cancel remains the safe default even after typing the destination', async () => {
+    const view = renderDialog()
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'gitea/main' },
+    })
+    const cancel = screen.getByRole('button', { name: 'Cancel', exact: true })
+    assert.equal(cancel.getAttribute('type'), 'submit')
+    await new Promise(resolve => setTimeout(resolve, 300))
+    fireEvent.click(cancel)
+    await waitFor(() => assert.equal(view.counts().dismissals, 1))
+    assert.deepEqual(view.pushed, [])
   })
 
   it('retains the existing upstream confirmation path', async () => {

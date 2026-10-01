@@ -228,12 +228,12 @@ export class CommitListItem extends React.PureComponent<
       return (
         <div className="commit-indicators">
           {tagIndicator}
-          {unpushedIndicator}
           <CommitActionsStatus
             gitHubRepository={this.props.gitHubRepository}
             accounts={this.props.accounts}
             sha={this.props.commit.sha}
           />
+          {unpushedIndicator}
         </div>
       )
     }

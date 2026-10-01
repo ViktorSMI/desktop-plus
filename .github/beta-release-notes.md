@@ -1,27 +1,23 @@
-## Remembered Actions status while moving the interface
+## Aligned History indicators
 
-Moving or resizing the window, scrolling History, and briefly hiding and restoring commit rows no longer discard their Actions status. A returning row immediately displays its cached circle instead of clearing it and starting the same request again. Equivalent account/profile objects also reuse the existing cache.
+Actions circles and unpushed arrows now share the same right-hand alignment and vertical center in the History list. An empty Actions slot no longer shifts the push arrow left. When a commit has both indicators, both remain visible side by side. Tags, selected rows, long titles, and narrow History panels keep their layout.
 
-The last known result stays visible while a due refresh is in flight. Results and unfinished requests are shared by account, hosting server, repository and full commit SHA; a recycled row never displays another commit's or account's result. Signing out or replacing credentials invalidates matching retained data.
+## Safer access to remote force push
 
-Polling still stops as soon as rows or the window are hidden. Active and failed runs refresh on the existing 30-second schedule; finished/no-run results use a two-minute freshness window. Idle repository caches are retained for up to five minutes, with at most eight idle targets and least-recently-used eviction of inactive commit snapshots. This is an in-memory cache, not permanent storage across application restarts.
+The prominent red Force push button has been removed from the branch picker's remote controls. Use the neutral **More remote actions (⋯)** menu, then **Force push <remote>/<branch>…**. Manage remotes is available in the same menu. Ordinary Fetch, Pull, and Push remain directly available.
 
-## Actions status beside commits
+Choosing Force push only opens the existing destination/commit confirmation. For a selected remote, the final button is disabled until the exact **remote/branch** is typed. Cancel remains the safe default. A changed confirmation snapshot invalidates the typed consent, and callbacks from an obsolete or closed remote menu cannot act on a different selection.
 
-The History commit list keeps the status indicators introduced in beta11:
+The existing explicit `--force-with-lease=<ref>:<expected commit>` safeguard is retained: unexpected remote commits reject the push, and the approved local commit and destination are checked again before execution. Other remotes, tags, and upstream configuration are not rewritten. Force push still deliberately replaces the reviewed branch history; the extra confirmation does not make it a non-destructive operation. The separate upstream-toolbar force-push flow is unchanged.
 
-- Red with a cross: a workflow failed, timed out, or requires attention.
-- Orange with a clock: workflows are queued, waiting, or running.
-- Green with a check: the latest relevant workflow runs passed.
+## Cache behavior
 
-Cancelled, stale, unknown, and all-skipped results remain gray. A commit without Actions runs has no colored badge. Hover for status, workflow count, and repository name. Push arrows and tags are unchanged; network errors are not displayed as successful checks.
+The beta12 in-memory status cache is retained. Reopening History within its retained lifetime immediately restores remembered circles and shares unfinished requests. Resizing or scrolling does not invalidate fresh results. Active/failed runs refresh every 30 seconds; finished/no-run results have a two-minute freshness window. A due refresh keeps the last circle visible while requesting the current status.
 
-## Existing features retained
-
-The embedded GitHub/Gitea Actions monitor, faster binary-diff engine and bounded hex rendering, multi-remote operations, non-destructive **Sync both remotes**, per-remote accounts, read-only Issues, and verified Windows updates are unchanged.
+Hidden rows are not polled. Idle repository caches expire after five minutes, with at most eight idle targets and bounded commit snapshots. Signing out, replacing credentials, or restarting the application invalidates the corresponding in-memory data. This release does not add persistent disk caching.
 
 ## Updating
 
-Windows users on an earlier **3.6.7 beta** can use the automatic updater or **Help > About > Check for updates**. Users on **3.6.6-beta6 or earlier** need one manual installation of a 3.6.7 beta to enable future Windows updates. macOS and Linux require manual installation or a package-manager update.
+Windows users on an earlier **3.6.7 beta** can use **Help > About > Check for updates**. Users on **3.6.6-beta6 or earlier** need one manual installation of a 3.6.7 beta to enable future Windows updates. macOS and Linux require manual installation or a package-manager update.
 
 This is a prerelease. Windows code signing remains disabled, and macOS builds are ad-hoc signed. Platform trust warnings may appear.

@@ -26,6 +26,7 @@ import { Button } from '../lib/button'
 import { Checkbox, CheckboxValue } from '../lib/checkbox'
 
 import { BranchList } from './branch-list'
+import { RemoteActionsButton } from './remote-actions-button'
 import { PullRequestList } from './pull-request-list'
 import { IssueList } from './issue-list'
 import { ActionsTab } from '../actions/actions-tab'
@@ -656,33 +657,28 @@ export class BranchesContainer extends React.Component<
               </>
             )}
 
-            <Button
-              className="remote-manage-button"
-              onClick={this.onManageRemotes}
+            <RemoteActionsButton
+              contextKey={JSON.stringify([
+                this.props.repository.id,
+                this.props.repository.path,
+                selectedRemote?.name,
+                selectedRemote?.url,
+                currentBranchName,
+                this.props.currentBranch?.tip.sha,
+                this.selectedRemoteAccountLogin,
+              ])}
               disabled={isBusy}
-              tooltip="Manage remotes"
-              ariaLabel="Manage remotes"
-            >
-              <Octicon symbol={octicons.gear} />
-            </Button>
+              forcePushLabel={
+                selectedRemote !== null && currentBranchName !== undefined
+                  ? `${selectedRemote.name}/${currentBranchName}`
+                  : undefined
+              }
+              forcePushDisabled={operationDisabled || !hasRemoteBranch}
+              onManageRemotes={this.onManageRemotes}
+              onForcePush={this.onForcePushSelectedRemote}
+            />
           </div>
         </div>
-        {selectedRemote !== null && currentBranchName !== undefined && (
-          <div className="remote-force-push-row">
-            <Button
-              className="destructive"
-              onClick={this.onForcePushSelectedRemote}
-              disabled={operationDisabled || !hasRemoteBranch}
-              tooltip={
-                hasRemoteBranch
-                  ? `Replace history on ${selectedRemote.name}/${currentBranchName} with a checked lease`
-                  : `Fetch ${selectedRemote.name} first. Use Push to create a new remote branch.`
-              }
-            >
-              Force push…
-            </Button>
-          </div>
-        )}
       </div>
     )
   }
@@ -802,7 +798,16 @@ export class BranchesContainer extends React.Component<
 
   private onForcePushSelectedRemote = () => {
     const remote = this.selectedRemote
-    if (remote === null || this.props.isRemoteOperationBlocked) {
+    if (
+      remote === null ||
+      this.unmounted ||
+      this.props.isRemoteOperationBlocked ||
+      this.state.remoteOperation !== null ||
+      this.props.currentBranch === null ||
+      !this.remoteHasCurrentBranch(remote) ||
+      (this.selectedRemoteAccounts.length > 1 &&
+        this.selectedRemoteAccountLogin === null)
+    ) {
       return
     }
     const repository = this.props.repository

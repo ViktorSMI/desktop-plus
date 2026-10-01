@@ -7,6 +7,7 @@ import { Checkbox, CheckboxValue } from '../lib/checkbox'
 import { Dispatcher } from '../dispatcher'
 import { DialogFooter, DialogContent, Dialog } from '../dialog'
 import { Ref } from '../lib/ref'
+import { TextBox } from '../lib/text-box'
 import { OkCancelButtonGroup } from '../dialog/ok-cancel-button-group'
 
 interface IConfirmForcePushProps {
@@ -19,6 +20,8 @@ interface IConfirmForcePushProps {
 }
 
 interface IConfirmForcePushState {
+  readonly confirmationValue: string
+  readonly confirmationRequest?: IRemoteForcePushRequest
   readonly isLoading: boolean
   readonly askForConfirmationOnForcePush: boolean
 }
@@ -33,9 +36,27 @@ export class ConfirmForcePush extends React.Component<
     super(props)
 
     this.state = {
+      confirmationValue: '',
       isLoading: false,
       askForConfirmationOnForcePush: props.askForConfirmationOnForcePush,
     }
+  }
+
+  private get canForcePush() {
+    const request = this.props.remoteRequest
+    return (
+      request === undefined ||
+      (this.state.confirmationRequest === request &&
+        this.state.confirmationValue ===
+          `${request.remote.name}/${request.branchName}`)
+    )
+  }
+
+  private onConfirmationChanged = (confirmationValue: string) => {
+    this.setState({
+      confirmationValue,
+      confirmationRequest: this.props.remoteRequest,
+    })
   }
 
   public render() {
@@ -81,6 +102,17 @@ export class ConfirmForcePush extends React.Component<
                 remote has new commits, the push will be rejected. Fetch and
                 review them before trying again.
               </p>
+              <TextBox
+                label={`To confirm, type ${request.remote.name}/${request.branchName}`}
+                value={
+                  this.state.confirmationRequest === request
+                    ? this.state.confirmationValue
+                    : ''
+                }
+                onValueChanged={this.onConfirmationChanged}
+                disabled={this.state.isLoading}
+                spellcheck={false}
+              />
             </>
           ) : (
             <div>
@@ -100,7 +132,7 @@ export class ConfirmForcePush extends React.Component<
           <OkCancelButtonGroup
             destructive={true}
             okButtonText={request === undefined ? "I'm sure" : 'Force push'}
-            okButtonDisabled={this.state.isLoading}
+            okButtonDisabled={this.state.isLoading || !this.canForcePush}
           />
         </DialogFooter>
       </Dialog>
@@ -116,7 +148,7 @@ export class ConfirmForcePush extends React.Component<
   }
 
   private onForcePush = async () => {
-    if (this.submitted) {
+    if (this.submitted || !this.canForcePush) {
       return
     }
     this.submitted = true

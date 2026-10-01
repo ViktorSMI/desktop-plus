@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { afterEach, beforeEach, describe, it, mock } from 'node:test'
+import { afterEach, beforeEach, describe, it } from 'node:test'
 import * as React from 'react'
 import { ISerializableMenuItem } from '../../../src/lib/menu-item'
 import { RemoteActionsButton } from '../../../src/ui/branches/remote-actions-button'
@@ -12,6 +12,7 @@ describe('remote actions overflow safety', () => {
   let choose: (indices: number[] | null) => void
   let confirmations: number
   let managed: number
+  let restoreBridge: (() => void) | undefined
   const props = () => ({
     contextKey: 'repository/remote/branch/tip/account',
     disabled: false,
@@ -27,17 +28,25 @@ describe('remote actions overflow safety', () => {
     managed = 0
     choose = () => assert.fail('No menu is open')
     const { ipcRenderer } = await import('electron')
-    mock.method(ipcRenderer, 'invoke', (channel, ...args) => {
+    const originalInvoke = ipcRenderer.invoke
+    restoreBridge = () => {
+      ipcRenderer.invoke = originalInvoke
+    }
+    ipcRenderer.invoke = (channel: string, items: ReadonlyArray<ISerializableMenuItem>) => {
       assert.equal(channel, 'show-contextual-menu')
-      menus.push(args[0])
+      menus.push(items)
       return new Promise<number[] | null>(resolve => {
         choose = resolve
       })
-    })
+    }
   })
   afterEach(() => {
-    cleanup()
-    mock.restoreAll()
+    try {
+      cleanup()
+    } finally {
+      restoreBridge?.()
+      restoreBridge = undefined
+    }
   })
 
   it('shows only a neutral overflow button and never pushes when opening or cancelling its menu', async () => {

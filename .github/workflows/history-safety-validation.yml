@@ -1,0 +1,28 @@
+name: History safety validation
+
+on:
+  push:
+    branches:
+      - work/history-safety
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Export tracked public sources for review
+        run: |
+          mkdir evidence
+          git archive --format=tar.gz HEAD > evidence/source.tar.gz
+          git rev-parse HEAD > evidence/source-commit.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: history-safety-source
+          path: evidence
+          retention-days: 3

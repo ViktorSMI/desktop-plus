@@ -1,0 +1,378 @@
+diff --git a/.github/workflows/ui-screenshots.yml b/.github/workflows/ui-screenshots.yml
+index fe9036b343932efbac728c98d0427df956ccc7fe..5f799e088a366d54c7546a26103810bacf6f70ef 100644
+--- a/.github/workflows/ui-screenshots.yml
++++ b/.github/workflows/ui-screenshots.yml
+@@ -21,6 +21,7 @@ jobs:
+     timeout-minutes: 20
+     env:
+       ACTIONS_VIEWER_TEST_OUTPUT: /tmp/actions-viewer-layout
++      HISTORY_INDICATOR_TEST_OUTPUT: /tmp/history-indicator-layout
+       ISSUE_READER_TEST_OUTPUT: /tmp/issue-reader-layout
+     steps:
+       - uses: actions/checkout@v7
+@@ -54,6 +55,18 @@ jobs:
+       - name: Test Actions viewer and capture screenshots
+         run: node script/check-actions-viewer-layout.mjs
+ 
++      - name: Test History indicator alignment and cached remounts
++        run: node script/check-history-indicator-layout.mjs
++
++      - name: Upload History indicator screenshots
++        if: always()
++        uses: actions/upload-artifact@v7
++        with:
++          name: history-indicator-layout
++          path: ${{ env.HISTORY_INDICATOR_TEST_OUTPUT }}
++          if-no-files-found: warn
++          retention-days: 30
++
+       - name: Upload Actions viewer screenshots
+         if: always()
+         uses: actions/upload-artifact@v7
+ diff --git a/app/src/ui/branches/branches-container.tsx b/app/src/ui/branches/branches-container.tsx
+index 1ed4e9c09a8d8851072c5f23076e6af2e4090ccf..de69c023f19ff641a23e8d3b4854cf9559eb5ca4 100644
+--- a/app/src/ui/branches/branches-container.tsx
++++ b/app/src/ui/branches/branches-container.tsx
+@@ -26,6 +26,7 @@ import { Button } from '../lib/button'
+ import { Checkbox, CheckboxValue } from '../lib/checkbox'
+ 
+ import { BranchList } from './branch-list'
++import { RemoteActionsButton } from './remote-actions-button'
+ import { PullRequestList } from './pull-request-list'
+ import { IssueList } from './issue-list'
+ import { ActionsTab } from '../actions/actions-tab'
+@@ -656,33 +657,28 @@ export class BranchesContainer extends React.Component<
+               </>
+             )}
+ 
+-            <Button
+-              className="remote-manage-button"
+-              onClick={this.onManageRemotes}
++            <RemoteActionsButton
++              contextKey={JSON.stringify([
++                this.props.repository.id,
++                this.props.repository.path,
++                selectedRemote?.name,
++                selectedRemote?.url,
++                currentBranchName,
++                this.props.currentBranch?.tip.sha,
++                this.selectedRemoteAccountLogin,
++              ])}
+               disabled={isBusy}
+-              tooltip="Manage remotes"
+-              ariaLabel="Manage remotes"
+-            >
+-              <Octicon symbol={octicons.gear} />
+-            </Button>
+-          </div>
+-        </div>
+-        {selectedRemote !== null && currentBranchName !== undefined && (
+-          <div className="remote-force-push-row">
+-            <Button
+-              className="destructive"
+-              onClick={this.onForcePushSelectedRemote}
+-              disabled={operationDisabled || !hasRemoteBranch}
+-              tooltip={
+-                hasRemoteBranch
+-                  ? `Replace history on ${selectedRemote.name}/${currentBranchName} with a checked lease`
+-                  : `Fetch ${selectedRemote.name} first. Use Push to create a new remote branch.`
++              forcePushLabel={
++                selectedRemote !== null && currentBranchName !== undefined
++                  ? `${selectedRemote.name}/${currentBranchName}`
++                  : undefined
+               }
+-            >
+-              Force push…
+-            </Button>
++              forcePushDisabled={operationDisabled || !hasRemoteBranch}
++              onManageRemotes={this.onManageRemotes}
++              onForcePush={this.onForcePushSelectedRemote}
++            />
+           </div>
+-        )}
++        </div>
+       </div>
+     )
+   }
+@@ -802,7 +798,16 @@ export class BranchesContainer extends React.Component<
+ 
+   private onForcePushSelectedRemote = () => {
+     const remote = this.selectedRemote
+-    if (remote === null || this.props.isRemoteOperationBlocked) {
++    if (
++      remote === null ||
++      this.unmounted ||
++      this.props.isRemoteOperationBlocked ||
++      this.state.remoteOperation !== null ||
++      this.props.currentBranch === null ||
++      !this.remoteHasCurrentBranch(remote) ||
++      (this.selectedRemoteAccounts.length > 1 &&
++        this.selectedRemoteAccountLogin === null)
++    ) {
+       return
+     }
+     const repository = this.props.repository
+ diff --git a/app/src/ui/history/commit-actions-status.tsx b/app/src/ui/history/commit-actions-status.tsx
+index 54146636786d39f7dd54359f9ebd0b11b3b91035..3a5a04e2bc7dcdcf8665ba2a3408aea12a78b687 100644
+--- a/app/src/ui/history/commit-actions-status.tsx
++++ b/app/src/ui/history/commit-actions-status.tsx
+@@ -152,7 +152,7 @@ export function ObservedCommitActionsStatus({
+       className="commit-actions-status"
+       style={{
+         display: 'inline-flex',
+-        width: 20,
++        width: 24,
+         height: 16,
+         flexShrink: 0,
+         alignItems: 'center',
+ diff --git a/app/src/ui/history/commit-list-item.tsx b/app/src/ui/history/commit-list-item.tsx
+index 51492e16b183a04633eadb3b758554369d738150..f25178463220d95fd533c96e51e4099ccd1d9a5e 100644
+--- a/app/src/ui/history/commit-list-item.tsx
++++ b/app/src/ui/history/commit-list-item.tsx
+@@ -228,12 +228,12 @@ export class CommitListItem extends React.PureComponent<
+       return (
+         <div className="commit-indicators">
+           {tagIndicator}
+-          {unpushedIndicator}
+           <CommitActionsStatus
+             gitHubRepository={this.props.gitHubRepository}
+             accounts={this.props.accounts}
+             sha={this.props.commit.sha}
+           />
++          {unpushedIndicator}
+         </div>
+       )
+     }
+ diff --git a/app/src/ui/rebase/confirm-force-push.tsx b/app/src/ui/rebase/confirm-force-push.tsx
+index 888235d2f9927f5e4697700f82ec5c26ef959565..28f4c96af8b01e5fe1dbe28351f451009353e06a 100644
+--- a/app/src/ui/rebase/confirm-force-push.tsx
++++ b/app/src/ui/rebase/confirm-force-push.tsx
+@@ -7,6 +7,7 @@ import { Checkbox, CheckboxValue } from '../lib/checkbox'
+ import { Dispatcher } from '../dispatcher'
+ import { DialogFooter, DialogContent, Dialog } from '../dialog'
+ import { Ref } from '../lib/ref'
++import { TextBox } from '../lib/text-box'
+ import { OkCancelButtonGroup } from '../dialog/ok-cancel-button-group'
+ 
+ interface IConfirmForcePushProps {
+@@ -19,6 +20,8 @@ interface IConfirmForcePushProps {
+ }
+ 
+ interface IConfirmForcePushState {
++  readonly confirmationValue: string
++  readonly confirmationRequest?: IRemoteForcePushRequest
+   readonly isLoading: boolean
+   readonly askForConfirmationOnForcePush: boolean
+ }
+@@ -33,11 +36,29 @@ export class ConfirmForcePush extends React.Component<
+     super(props)
+ 
+     this.state = {
++      confirmationValue: '',
+       isLoading: false,
+       askForConfirmationOnForcePush: props.askForConfirmationOnForcePush,
+     }
+   }
+ 
++  private get canForcePush() {
++    const request = this.props.remoteRequest
++    return (
++      request === undefined ||
++      (this.state.confirmationRequest === request &&
++        this.state.confirmationValue ===
++          `${request.remote.name}/${request.branchName}`)
++    )
++  }
++
++  private onConfirmationChanged = (confirmationValue: string) => {
++    this.setState({
++      confirmationValue,
++      confirmationRequest: this.props.remoteRequest,
++    })
++  }
++
+   public render() {
+     const request = this.props.remoteRequest
+     return (
+@@ -81,6 +102,17 @@ export class ConfirmForcePush extends React.Component<
+                 remote has new commits, the push will be rejected. Fetch and
+                 review them before trying again.
+               </p>
++              <TextBox
++                label={`To confirm, type ${request.remote.name}/${request.branchName}`}
++                value={
++                  this.state.confirmationRequest === request
++                    ? this.state.confirmationValue
++                    : ''
++                }
++                onValueChanged={this.onConfirmationChanged}
++                disabled={this.state.isLoading}
++                spellcheck={false}
++              />
+             </>
+           ) : (
+             <div>
+@@ -100,7 +132,7 @@ export class ConfirmForcePush extends React.Component<
+           <OkCancelButtonGroup
+             destructive={true}
+             okButtonText={request === undefined ? "I'm sure" : 'Force push'}
+-            okButtonDisabled={this.state.isLoading}
++            okButtonDisabled={this.state.isLoading || !this.canForcePush}
+           />
+         </DialogFooter>
+       </Dialog>
+@@ -116,7 +148,7 @@ export class ConfirmForcePush extends React.Component<
+   }
+ 
+   private onForcePush = async () => {
+-    if (this.submitted) {
++    if (this.submitted || !this.canForcePush) {
+       return
+     }
+     this.submitted = true
+ diff --git a/app/styles/ui/_branches.scss b/app/styles/ui/_branches.scss
+index c978f4c1ed695c779886475706bd2a560c83714c..ed96a610ac77d604913de3c2f64a8df20b44a344 100644
+--- a/app/styles/ui/_branches.scss
++++ b/app/styles/ui/_branches.scss
+@@ -170,12 +170,6 @@
+     white-space: nowrap;
+   }
+ 
+-  .remote-force-push-row {
+-    display: flex;
+-    justify-content: flex-end;
+-    margin-top: var(--spacing-half);
+-  }
+-
+   @media (max-width: 430px) {
+     .remote-switcher-meta {
+       align-items: stretch;
+ diff --git a/app/styles/ui/history/_commit-list.scss b/app/styles/ui/history/_commit-list.scss
+index 840f9bea183b036dbcddd8d1e5fe64e7d6159117..3c6030545e2b91ce853588173f1b01f9332e2233 100644
+--- a/app/styles/ui/history/_commit-list.scss
++++ b/app/styles/ui/history/_commit-list.scss
+@@ -148,6 +148,7 @@
+     flex-flow: nowrap row;
+     flex: 1 1 auto;
+     justify-content: flex-end;
++    align-items: center;
+     margin-left: var(--spacing);
+     color: var(--list-item-badge-color);
+     height: 16px;
+@@ -179,13 +180,18 @@
+       }
+     }
+ 
++    // The final indicator always occupies the same centered 24px column.
++    // Actions comes before the push arrow, so an empty Actions slot cannot
++    // shift an unpushed commit left. When both exist, keep both side by side.
+     .unpushed-indicator {
+-      flex: 0 0 auto;
++      display: inline-flex;
++      flex: 0 0 24px;
++      align-items: center;
++      justify-content: center;
+       height: 100%;
+       border-radius: 8px;
+-      padding: 0 var(--spacing-half);
++      padding: 0;
+       background: var(--list-item-badge-background-color);
+-      margin-left: var(--spacing-half);
+     }
+   }
+ 
+ diff --git a/app/test/unit/ui/remote-force-push-dialog-test.tsx b/app/test/unit/ui/remote-force-push-dialog-test.tsx
+index 1fbdec3fb36aa765982cf0cf2f9eefd4654853e4..6de3610c7c033c1fdd64692d79350cf94d8800b8 100644
+--- a/app/test/unit/ui/remote-force-push-dialog-test.tsx
++++ b/app/test/unit/ui/remote-force-push-dialog-test.tsx
+@@ -40,13 +40,13 @@ function renderDialog(targeted = true) {
+       preferenceChanges++
+     },
+   } as unknown as Dispatcher
+-  render(
++  const element = (remoteRequest: IRemoteForcePushRequest | undefined) => (
+     <DialogStackContext.Provider value={{ isTopMost: true }}>
+       <ConfirmForcePush
+         dispatcher={dispatcher}
+         repository={new Repository('/test/project', -1, null, false)}
+         upstreamBranch={targeted ? 'gitea/main' : 'origin/main'}
+-        remoteRequest={targeted ? request : undefined}
++        remoteRequest={remoteRequest}
+         askForConfirmationOnForcePush={false}
+         onDismissed={() => {
+           dismissals++
+@@ -54,7 +54,9 @@ function renderDialog(targeted = true) {
+       />
+     </DialogStackContext.Provider>
+   )
++  const view = render(element(targeted ? request : undefined))
+   return {
++    rerenderRequest: (next: IRemoteForcePushRequest) => view.rerender(element(next)),
+     pushed,
+     counts: () => ({ normalPushes, dismissals, preferenceChanges }),
+   }
+@@ -139,6 +141,7 @@ describe('remote force push confirmation', () => {
+       name: 'Force push',
+       exact: true,
+     })
++    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'gitea/main' } })
+     fireEvent.click(button)
+     fireEvent.click(button)
+     await waitFor(() => assert.equal(view.pushed.length, 1))
+@@ -147,6 +150,56 @@ describe('remote force push confirmation', () => {
+     assert.equal(view.counts().preferenceChanges, 0)
+   })
+ 
++
++  it('requires the exact destination and blocks direct form submission without it', () => {
++    const view = renderDialog()
++    const input = screen.getByRole('textbox', { name: 'To confirm, type gitea/main' })
++    const button = screen.getByRole('button', { name: 'Force push', exact: true })
++    const form = button.closest('form')
++    assert.ok(form)
++    for (const value of ['', 'main', 'origin/main', 'gitea/Main', ' gitea/main', 'gitea/main ']) {
++      fireEvent.change(input, { target: { value } })
++      assert.equal(button.getAttribute('aria-disabled'), 'true')
++      fireEvent.click(button)
++      fireEvent.submit(form)
++      assert.equal(view.pushed.length, 0)
++      assert.equal(view.counts().dismissals, 0)
++    }
++    fireEvent.change(input, { target: { value: 'gitea/main' } })
++    assert.notEqual(button.getAttribute('aria-disabled'), 'true')
++    fireEvent.change(input, { target: { value: '' } })
++    assert.equal(button.getAttribute('aria-disabled'), 'true')
++  })
++
++  it('invalidates typed consent when the approved snapshot changes, even on the same branch', () => {
++    const view = renderDialog()
++    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'gitea/main' } })
++    const next = { ...request, lease: { ...request.lease, localTip: 'c'.repeat(40) } }
++    view.rerenderRequest(next)
++    const input = screen.getByRole('textbox') as HTMLInputElement
++    const button = screen.getByRole('button', { name: 'Force push', exact: true })
++    assert.equal(input.value, '')
++    assert.equal(button.getAttribute('aria-disabled'), 'true')
++    const form = button.closest('form')
++    assert.ok(form)
++    fireEvent.submit(form)
++    assert.equal(view.pushed.length, 0)
++    fireEvent.change(input, { target: { value: 'gitea/main' } })
++    fireEvent.click(button)
++    assert.deepEqual(view.pushed, [next])
++  })
++
++  it('Cancel remains the safe default even after typing the destination', async () => {
++    const view = renderDialog()
++    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'gitea/main' } })
++    const cancel = screen.getByRole('button', { name: 'Cancel', exact: true })
++    assert.equal(cancel.getAttribute('type'), 'submit')
++    await new Promise(resolve => setTimeout(resolve, 300))
++    fireEvent.click(cancel)
++    await waitFor(() => assert.equal(view.counts().dismissals, 1))
++    assert.deepEqual(view.pushed, [])
++  })
++
+   it('retains the existing upstream confirmation path', async () => {
+     const view = renderDialog(false)
+     assert(screen.getByRole('checkbox'))

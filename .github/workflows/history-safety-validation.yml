@@ -9,20 +9,137 @@ permissions:
   contents: read
 
 jobs:
-  source:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 16
+          submodules: recursive
           persist-credentials: false
-      - name: Export tracked public sources for review
+      - name: Apply reviewed patch to existing files
+        shell: bash
         run: |
-          mkdir evidence
-          git archive --format=tar.gz HEAD > evidence/source.tar.gz
-          git rev-parse HEAD > evidence/source-commit.txt
+          set -euo pipefail
+          sed 's/^ diff --git /diff --git /' .github/history-safety.patch | git apply --index
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: '24.19.0'
+          arch: x64
+      - name: Format and save exact candidate sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/source
+          { git diff --cached --name-only; git diff --name-only c3cb258db6c5633d6872713ae0759b3a5835a1d4 HEAD; } | sort -u | grep -v -E '^\.github/(history-safety\.patch|workflows/history-safety-validation\.yml)$' > evidence/files.txt
+          grep -E '\.(ts|tsx|scss|yml)$' evidence/files.txt | xargs node node_modules/prettier/bin-prettier.js --write
+          while IFS= read -r file; do
+            mkdir -p "evidence/source/$(dirname "$file")"
+            cp "$file" "evidence/source/$file"
+            echo "$(git hash-object "$file") $file" >> evidence/tested-blobs.txt
+          done < evidence/files.txt
+          git diff --binary > evidence/formatting.patch
+      - name: Prepare Git test fixtures
+        run: yarn test:setup
+      - name: Test force-push UI, real Git safety and all commit Actions regressions
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          node script/test.mjs app/test/unit/ui/remote-actions-button-test.tsx app/test/unit/ui/remote-force-push-dialog-test.tsx app/test/unit/git/remote-force-push-test.ts app/test/unit/commit-actions-test.ts app/test/unit/commit-actions-client-test.ts app/test/unit/commit-actions-store-test.ts app/test/unit/commit-actions-status-test.tsx app/test/unit/commit-actions-pool-test.ts app/test/unit/commit-actions-cache-test.tsx 2>&1 | tee evidence/tests.log
+      - name: Lint and validate changelog
+        if: ${{ !cancelled() }}
+        run: yarn lint && yarn validate-changelog
+      - name: Production compilation and typecheck
+        if: ${{ !cancelled() }}
+        run: yarn compile:prod
+      - name: Install test browser
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Verify History alignment, screenshots and cache in Chromium
+        env:
+          HISTORY_INDICATOR_TEST_OUTPUT: evidence/layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          node script/check-history-indicator-layout.mjs 2>&1 | tee evidence/layout.log
+      - name: Verify the old row ordering fails the alignment regression
+        timeout-minutes: 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=app/src/ui/history/commit-list-item.tsx
+          cp "$FILE" /tmp/candidate-history.tsx
+          trap 'cp /tmp/candidate-history.tsx "$FILE"' EXIT
+          git show c3cb258db6c5633d6872713ae0759b3a5835a1d4:"$FILE" > "$FILE"
+          CODE=0
+          HISTORY_INDICATOR_TEST_OUTPUT=evidence/before-layout node script/check-history-indicator-layout.mjs > evidence/before-layout.log 2>&1 || CODE=$?
+          cat evidence/before-layout.log
+          test "$CODE" -eq 1
+          grep 'History indicator centers must share' evidence/before-layout.log
+      - name: Save test evidence and exact sources
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: history-safety-validation
+          path: evidence
+          if-no-files-found: error
+          retention-days: 7
+
+  store-tested-blobs:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: history-safety-validation
+          path: evidence
+      - name: Store hash-verified tested blobs without updating any refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import base64
+          import hashlib
+          import json
+          import os
+          import re
+          import urllib.request
+          from pathlib import Path, PurePosixPath
+
+          root = Path('evidence/source').resolve()
+          blobs = {}
+          for line in Path('evidence/tested-blobs.txt').read_text().splitlines():
+              expected, name = line.split(' ', 1)
+              relative = PurePosixPath(name)
+              if relative.is_absolute() or '..' in relative.parts or not re.fullmatch(r'[0-9a-f]{40}', expected):
+                  raise SystemExit('Invalid tested blob entry')
+              file = (root / name).resolve()
+              if not file.is_relative_to(root):
+                  raise SystemExit('Invalid source path')
+              content = file.read_bytes()
+              actual = hashlib.sha1(('blob ' + str(len(content)) + '\0').encode() + content).hexdigest()
+              if actual != expected:
+                  raise SystemExit('Tested source digest mismatch: ' + name)
+              body = json.dumps({'encoding': 'base64', 'content': base64.b64encode(content).decode()}).encode()
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/blobs',
+                  data=body,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'},
+                  method='POST',
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  stored = json.load(response)['sha']
+              if stored != expected:
+                  raise SystemExit('GitHub blob digest mismatch: ' + name)
+              blobs[name] = stored
+              print(stored, name)
+          Path('tested-github-blobs.json').write_text(json.dumps(blobs, indent=2) + '\n')
       - uses: actions/upload-artifact@v7
         with:
-          name: history-safety-source
-          path: evidence
-          retention-days: 3
+          name: history-safety-git-blobs
+          path: tested-github-blobs.json
+          retention-days: 7

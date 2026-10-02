@@ -109,6 +109,7 @@ export enum PopupType {
   PullRequestComment = 'PullRequestComment',
   IssueDetail = 'IssueDetail',
   ActionsRun = 'ActionsRun',
+  CommitActions = 'CommitActions',
   UnknownAuthors = 'UnknownAuthors',
   TestIcons = 'TestIcons',
   ConfirmRestart = 'ConfirmRestart',
@@ -149,6 +150,7 @@ interface IBasePopup {
 }
 
 export type PopupDetail =
+  | { type: PopupType.CommitActions; target: IActionsTarget; sha: string }
   | { type: PopupType.ActionsRun; target: IActionsTarget; runId: number }
   | {
       type: PopupType.IssueDetail

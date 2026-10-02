@@ -15,6 +15,9 @@ export interface ICommitActionsSummary {
 
 export interface ICommitActionsRun {
   readonly id: number
+  /** Display only. Navigation always uses the validated database id. */
+  readonly name?: string
+  readonly number?: number
   readonly attempt: number
   readonly workflow: string
   readonly event: string
@@ -88,6 +91,13 @@ export function parseCommitActionsPage(body: unknown, sha: string) {
         : `run:${id}`
     return {
       id,
+      name: text(run.name) || text(run.display_title) || undefined,
+      number:
+        typeof run.run_number === 'number' &&
+        Number.isSafeInteger(run.run_number) &&
+        run.run_number > 0
+          ? run.run_number
+          : undefined,
       attempt:
         run.run_attempt == null || run.run_attempt === 0
           ? 1
@@ -127,9 +137,10 @@ function runState(run: ICommitActionsRun): Exclude<CommitActionsState, 'none'> {
   }
 }
 
-export function summarizeCommitActions(
+/** Same latest workflow/event/branch selection for badges and navigation. */
+export function latestCommitActionsRuns(
   runs: ReadonlyArray<ICommitActionsRun>
-): ICommitActionsSummary {
+): ReadonlyArray<ICommitActionsRun> {
   const latest = new Map<string, ICommitActionsRun>()
   for (const run of runs) {
     const key = JSON.stringify([run.workflow, run.event, run.branch])
@@ -150,7 +161,13 @@ export function summarizeCommitActions(
       latest.set(key, { ...run, status: 'unknown', conclusion: null })
     }
   }
-  const states = Array.from(latest.values(), runState)
+  return Array.from(latest.values()).sort((a, b) => b.id - a.id)
+}
+
+export function summarizeCommitActions(
+  runs: ReadonlyArray<ICommitActionsRun>
+): ICommitActionsSummary {
+  const states = latestCommitActionsRuns(runs).map(runState)
   const count = states.length
   const state: CommitActionsState =
     count === 0
@@ -186,10 +203,10 @@ export interface ICommitActionsPage {
 }
 
 /** Read every page, bounded for API/rate-limit safety. Incomplete is not success. */
-export async function loadCommitActions(
+export async function loadCommitActionsRuns(
   sha: string,
   readPage: (page: number) => Promise<ICommitActionsPage>
-): Promise<ICommitActionsSummary> {
+): Promise<ReadonlyArray<ICommitActionsRun>> {
   validateCommitSHA(sha)
   const runs: ICommitActionsRun[] = []
   const seen = new Set<number>()
@@ -206,11 +223,19 @@ export async function loadCommitActions(
       if (seen.size < parsed.total) {
         throw new Error('Actions result is incomplete')
       }
-      return summarizeCommitActions(runs)
+      return latestCommitActionsRuns(runs)
     }
     if (seen.size === oldSize) {
       throw new Error('Actions pagination did not advance')
     }
   }
   throw new Error('Actions result is incomplete')
+}
+
+/** Retain the compact badge cache; full run choices are loaded only on demand. */
+export async function loadCommitActions(
+  sha: string,
+  readPage: (page: number) => Promise<ICommitActionsPage>
+): Promise<ICommitActionsSummary> {
+  return summarizeCommitActions(await loadCommitActionsRuns(sha, readPage))
 }

@@ -3,7 +3,11 @@ import { parsedResponse } from './http'
 import { Account } from '../models/account'
 import { GitHubRepository } from '../models/github-repository'
 import { IActionsTarget } from '../models/actions'
-import { loadCommitActions, validateCommitSHA } from './commit-actions'
+import {
+  loadCommitActionsRuns,
+  summarizeCommitActions,
+  validateCommitSHA,
+} from './commit-actions'
 
 /** Use the history repository itself, never a fork's upstream parent. */
 export function commitActionsTarget(
@@ -59,6 +63,17 @@ export class CommitActionsClient extends API {
     target: IActionsTarget,
     sha: string
   ) {
+    return summarizeCommitActions(
+      await this.runsForCommit(account, target, sha)
+    )
+  }
+
+  /** Resolve run choices on deliberate navigation, never during a row render. */
+  public async runsForCommit(
+    account: Account,
+    target: IActionsTarget,
+    sha: string
+  ) {
     const head = validateCommitSHA(sha)
     if (
       account.endpoint !== target.endpoint ||
@@ -73,7 +88,7 @@ export class CommitActionsClient extends API {
     if (target.provider === 'gitea' && !(gitea instanceof GiteaAPI)) {
       throw new Error('Expected the selected Gitea API instance')
     }
-    return loadCommitActions(head, async page => {
+    return loadCommitActionsRuns(head, async page => {
       const query = new URLSearchParams({
         head_sha: head,
         page: String(page),

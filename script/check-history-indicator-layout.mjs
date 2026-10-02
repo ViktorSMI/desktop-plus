@@ -12,7 +12,8 @@ const require = createRequire(import.meta.url)
 const ts = require('typescript')
 const { chromium } = require('@playwright/test')
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const output = process.env.HISTORY_INDICATOR_TEST_OUTPUT || '/tmp/history-indicator-layout'
+const output =
+  process.env.HISTORY_INDICATOR_TEST_OUTPUT || '/tmp/history-indicator-layout'
 fs.mkdirSync(output, { recursive: true })
 const sources = {
   row: 'app/src/ui/history/commit-list-item.tsx',
@@ -24,9 +25,17 @@ const sources = {
   drag: 'app/src/models/drag-drop.ts',
 }
 const factories = Object.entries(sources).map(([name, file]) => {
-  const js = ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
-  }).outputText
+  const js = ts.transpileModule(
+    fs.readFileSync(path.join(root, file), 'utf8'),
+    {
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.React,
+        esModuleInterop: true,
+      },
+    }
+  ).outputText
   return `${JSON.stringify(name)}: function(require,module,exports) {\n${js}\n}`
 })
 const browser = await chromium.launch({ headless: true })
@@ -43,15 +52,21 @@ try {
     #commit-list .list-item {height:64px;flex:0 0 64px}
     .fixture-avatar {height:16px;width:16px;border-radius:50%;background:#6e7781;margin-right:4px}
   </style></head><body class="theme-dark"><div id="commit-list"></div></body></html>`)
-  for (const file of ['app/node_modules/react/umd/react.development.js', 'app/node_modules/react-dom/umd/react-dom.development.js']) {
+  for (const file of [
+    'app/node_modules/react/umd/react.development.js',
+    'app/node_modules/react-dom/umd/react-dom.development.js',
+  ]) {
     await page.addScriptTag({ path: path.join(root, file) })
   }
-  await page.addScriptTag({ content: `
+  await page.addScriptTag({
+    content: `
     window.__DARWIN__=false; window.__WIN32__=true; window.__LINUX__=false;
-    const factories={${factories.join(',\n')}}; const cache={}; const noop=()=>{};
+    const factories={${factories.join(
+      ',\n'
+    )}}; const cache={}; const noop=()=>{};
     const e=React.createElement;
     const states=['none','success','failure','pending','none','success','failure','none'];
-    window.requests=0;
+    window.requests=0; window.openedActions=[]; window.rowActivations=0; window.contextMenus=0;
     const mocks={
       'react': React,
       'classnames': (...values)=>values.flatMap(v=>typeof v==='object'&&v?Object.keys(v).filter(k=>v[k]):v||[]).join(' '),
@@ -78,55 +93,157 @@ try {
     function load(name){name=aliases[name]||name;if(Object.prototype.hasOwnProperty.call(mocks,name))return mocks[name];if(cache[name])return cache[name].exports;if(!factories[name])throw Error('Unexpected fixture dependency: '+name);const module=cache[name]={exports:{}};factories[name](load,module,module.exports);return module.exports;}
     const titles=['Unpushed commit','Successful workflow','Failed workflow','Workflow in progress','Tagged unpushed commit','Tagged successful commit with a very long title that must truncate without moving the status column','Both Actions and unpushed indicators','No workflow runs'];
     const commits=titles.map((summary,i)=>({sha:i.toString(16).repeat(40),summary,author:{date:new Date()},isMergeCommit:false,tags:i===4||i===5?['release/very-long-tag-name-that-must-not-overlap-indicators','extra-tag']:[]}));
-    window.renderHistory=()=>ReactDOM.render(e(React.Fragment,null,...commits.map((commit,i)=>e('div',{key:commit.sha,className:'list-item'+(i===5?' selected':''),'data-row':i},e(load('row').CommitListItem,{gitHubRepository:{},commit,selectedCommits:[],emoji:new Map(),showUnpushedIndicator:[0,4,6].includes(i),unpushedIndicatorTitle:'Not pushed',accounts:[{id:1,login:'fixture',endpoint:'https://api.github.com',apiType:'dotcom',token:'fixture-only',refreshToken:''}],preferAbsoluteDates:false,showConventionalCommitBadges:false})))),document.getElementById('commit-list'));
+    window.renderHistory=()=>ReactDOM.render(e(React.Fragment,null,...commits.map((commit,i)=>e('div',{key:commit.sha,className:'list-item'+(i===5?' selected':''),'data-row':i,onMouseDown:()=>window.rowActivations++,onClick:()=>window.rowActivations++,onDoubleClick:()=>window.rowActivations++,onContextMenu:e=>{e.preventDefault();window.contextMenus++}},e(load('row').CommitListItem,{gitHubRepository:{},onOpenActions:(target,sha)=>window.openedActions.push({target,sha}),commit,selectedCommits:[],emoji:new Map(),showUnpushedIndicator:[0,4,6].includes(i),unpushedIndicatorTitle:'Not pushed',accounts:[{id:1,login:'fixture',endpoint:'https://api.github.com',apiType:'dotcom',token:'fixture-only',refreshToken:''}],preferAbsoluteDates:false,showConventionalCommitBadges:false})))),document.getElementById('commit-list'));
     window.closeHistory=()=>ReactDOM.unmountComponentAtNode(document.getElementById('commit-list'));
     renderHistory();
-  ` })
-  await page.waitForFunction(() => document.querySelectorAll('.commit-actions-status-icon').length === 5)
+  `,
+  })
+  await page.waitForFunction(
+    () => document.querySelectorAll('.commit-actions-status-icon').length === 5
+  )
   assert.equal(await page.evaluate(() => window.requests), 8)
   const geometry = []
   for (const theme of ['theme-dark', 'theme-light']) {
-    await page.evaluate(theme => { document.body.className = theme }, theme)
+    await page.evaluate(theme => {
+      document.body.className = theme
+    }, theme)
     for (const width of [1000, 600, 360]) {
       await page.setViewportSize({ width, height: 650 })
       await page.waitForTimeout(100)
-      await page.screenshot({ path: path.join(output, `${theme}-${width}.png`) })
-      const rows = await page.evaluate(() => Array.from(document.querySelectorAll('.list-item')).map(row => {
-        const r = row.getBoundingClientRect()
-        const center = el => {if(!el)return null;const b=el.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2,width:b.width}}
-        return {x:r.x,right:r.right,y:r.y+r.height/2,arrow:center(row.querySelector('.unpushed-indicator')),status:center(row.querySelector('.commit-actions-status-icon')),overflow:row.scrollWidth-row.clientWidth}
-      }))
+      await page.screenshot({
+        path: path.join(output, `${theme}-${width}.png`),
+      })
+      const rows = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('.list-item')).map(row => {
+          const r = row.getBoundingClientRect()
+          const center = el => {
+            if (!el) return null
+            const b = el.getBoundingClientRect()
+            return {
+              x: b.x + b.width / 2,
+              y: b.y + b.height / 2,
+              width: b.width,
+            }
+          }
+          return {
+            x: r.x,
+            right: r.right,
+            y: r.y + r.height / 2,
+            arrow: center(row.querySelector('.unpushed-indicator')),
+            status: center(row.querySelector('.commit-actions-status-icon')),
+            overflow: row.scrollWidth - row.clientWidth,
+          }
+        })
+      )
       const axis = rows[0].arrow.x
       for (const row of rows) {
         const last = row.arrow ?? row.status
         if (last) {
-          assert.ok(Math.abs(last.x-axis) < 0.5, 'History indicator centers must share one right-hand column: '+JSON.stringify(rows))
-          assert.ok(Math.abs(last.y-row.y) < 1, 'Indicator must be vertically centered')
+          assert.ok(
+            Math.abs(last.x - axis) < 0.5,
+            'History indicator centers must share one right-hand column: ' +
+              JSON.stringify(rows)
+          )
+          assert.ok(
+            Math.abs(last.y - row.y) < 1,
+            'Indicator must be vertically centered'
+          )
         }
-        assert.ok(row.overflow < 2, 'History row must not overflow at narrow widths')
+        assert.ok(
+          row.overflow < 2,
+          'History row must not overflow at narrow widths'
+        )
         if (row.arrow && row.status) {
-          assert.ok(row.status.x+row.status.width/2 <= row.arrow.x-row.arrow.width/2, 'Both indicators must remain visible without overlap')
+          assert.ok(
+            row.status.x + row.status.width / 2 <=
+              row.arrow.x - row.arrow.width / 2,
+            'Both indicators must remain visible without overlap'
+          )
         }
       }
-      geometry.push({theme,width,rows})
+      geometry.push({ theme, width, rows })
     }
   }
   // A real row teardown/remount must hydrate before the asynchronous observer.
   const cachedImmediately = await page.evaluate(() => {
-    window.closeHistory(); window.renderHistory();
+    window.closeHistory()
+    window.renderHistory()
     return document.querySelectorAll('.commit-actions-status-icon').length
   })
-  assert.equal(cachedImmediately, 5, 'Reopening History must paint cached status immediately')
+  assert.equal(
+    cachedImmediately,
+    5,
+    'Reopening History must paint cached status immediately'
+  )
   await page.waitForTimeout(100)
-  for(let i=0;i<25;i++) {
+  for (let i = 0; i < 25; i++) {
     await page.evaluate(() => window.renderHistory())
-    await page.setViewportSize({width: i%2 ? 1000 : 360,height:650})
+    await page.setViewportSize({ width: i % 2 ? 1000 : 360, height: 650 })
   }
-  assert.equal(await page.evaluate(() => window.requests), 8, 'Layout changes and reopening must not trigger extra requests while fresh')
+  assert.equal(
+    await page.evaluate(() => window.requests),
+    8,
+    'Layout changes and reopening must not trigger extra requests while fresh'
+  )
+  const actionButton = page.locator(
+    '[data-row="1"] .commit-actions-status-button'
+  )
+  await actionButton.click()
+  await actionButton.focus()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Space')
+  await actionButton.click({ button: 'right' })
+  const navigation = await page.evaluate(() => ({
+    opened: window.openedActions,
+    rows: window.rowActivations,
+    menus: window.contextMenus,
+    requests: window.requests,
+  }))
+  assert.equal(
+    navigation.opened.length,
+    3,
+    'Click, Enter and Space must each open once'
+  )
+  assert.ok(
+    navigation.opened.every(
+      item =>
+        item.sha === '1'.repeat(40) &&
+        item.target.owner === 'fixture' &&
+        item.target.name === 'repository'
+    )
+  )
+  assert.equal(
+    navigation.rows,
+    0,
+    'Badge activation must not select, drag or double-click a row'
+  )
+  assert.equal(
+    navigation.menus,
+    1,
+    'Right click must still reach the commit context menu'
+  )
+  assert.equal(
+    navigation.requests,
+    8,
+    'Navigation must not invalidate the badge cache'
+  )
+  fs.writeFileSync(
+    path.join(output, 'navigation.json'),
+    JSON.stringify({ passed: true, ...navigation }, null, 2) + '\n'
+  )
   assert.deepEqual(errors, [])
-  fs.writeFileSync(path.join(output,'geometry.json'),JSON.stringify({passed:true,requests:8,themes:2,widths:3,geometry},null,2)+'\n')
+  fs.writeFileSync(
+    path.join(output, 'geometry.json'),
+    JSON.stringify(
+      { passed: true, requests: 8, themes: 2, widths: 3, geometry },
+      null,
+      2
+    ) + '\n'
+  )
   await page.evaluate(() => window.closeHistory())
-  console.log('PASS: aligned centers in 2 themes × 3 widths; both indicators preserved; cached remount and 25 layout updates kept 8 initial requests.')
+  console.log(
+    'PASS: aligned centers in 2 themes × 3 widths; both indicators preserved; cached remount and 25 layout updates kept 8 initial requests.'
+  )
 } finally {
   await browser.close()
 }

@@ -1,4 +1,5 @@
 import { createActionsClient } from '../../lib/actions-client'
+import { CommitActionsClient } from '../../lib/commit-actions-client'
 import { ActionsRunFilter, IActionsTarget } from '../../models/actions'
 import { Disposable } from 'event-kit'
 
@@ -1429,7 +1430,7 @@ export class Dispatcher {
     return this.appStore._refreshIssues(repository)
   }
 
-  private actionsClient(target: IActionsTarget) {
+  private actionsAccount(target: IActionsTarget) {
     const account = this.getAccounts().find(
       a =>
         a.endpoint === target.endpoint &&
@@ -1441,7 +1442,21 @@ export class Dispatcher {
     if (account === undefined) {
       throw new Error('The selected Actions account is no longer signed in')
     }
-    return createActionsClient(account, target)
+    return account
+  }
+
+  private actionsClient(target: IActionsTarget) {
+    return createActionsClient(this.actionsAccount(target), target)
+  }
+
+  public async fetchCommitActionsRuns(target: IActionsTarget, sha: string) {
+    const account = this.actionsAccount(target)
+    const client = new CommitActionsClient(
+      account.endpoint,
+      account.token,
+      account.login
+    )
+    return client.runsForCommit(account, target, sha)
   }
 
   public async fetchActionsRuns(

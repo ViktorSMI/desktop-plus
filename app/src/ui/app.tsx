@@ -1,4 +1,5 @@
 import { ActionsRunDialog } from './actions/actions-run-dialog'
+import { CommitActionsDialog } from './actions/commit-actions-dialog'
 import * as Path from 'path'
 import * as React from 'react'
 import { IssueDetailDialog } from './branches/issue-detail-dialog'
@@ -2695,6 +2696,15 @@ export class App extends React.Component<IAppProps, IAppState> {
             signOffCommits={repositoryState.signOffCommits}
             allowEmptyCommit={repositoryState.allowEmptyCommit}
             onUpdateCommitOptions={this.onUpdateCommitOptions}
+          />
+        )
+      case PopupType.CommitActions:
+        return (
+          <CommitActionsDialog
+            target={popup.target}
+            sha={popup.sha}
+            reader={this.props.dispatcher}
+            onDismissed={onPopupDismissedFn}
           />
         )
       case PopupType.ActionsRun:

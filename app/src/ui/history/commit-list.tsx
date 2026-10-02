@@ -5,6 +5,9 @@ import { GitHubRepository } from '../../models/github-repository'
 import { Commit, CommitOneLine } from '../../models/commit'
 import { Branch } from '../../models/branch'
 import { CommitListItem } from './commit-list-item'
+import { OpenCommitActions } from './commit-actions-status'
+import { commitActionsTarget } from '../../lib/commit-actions-client'
+import { PopupType } from '../../models/popup'
 import { KeyboardInsertionData, List } from '../lib/list'
 import { arrayEquals } from '../../lib/equality'
 import { DragData, DragType } from '../../models/drag-drop'
@@ -328,6 +331,14 @@ export class CommitList extends React.Component<
   private isLocalCommit = (sha: string) =>
     this.props.localCommitSHAs.includes(sha)
 
+  private onOpenActions: OpenCommitActions = (target, sha) => {
+    this.props.dispatcher.showPopup({
+      type: PopupType.CommitActions,
+      target,
+      sha,
+    })
+  }
+
   private renderCommit = (row: number) => {
     const sha = this.props.commitSHAs[row]
     const commit = this.props.commitLookup.get(sha)
@@ -380,6 +391,7 @@ export class CommitList extends React.Component<
         onRemoveDragElement={this.props.onRemoveCommitDragElement}
         disableSquashing={this.props.disableSquashing}
         accounts={this.props.accounts}
+        onOpenActions={this.onOpenActions}
         dragSourceBranch={this.props.dragSourceBranch}
         preferAbsoluteDates={this.props.preferAbsoluteDates}
         showConventionalCommitBadges={this.props.showConventionalCommitBadges}
@@ -986,6 +998,33 @@ export class CommitList extends React.Component<
       }
     )
 
+    if (
+      gitHubRepository?.type === 'github' ||
+      gitHubRepository?.type === 'gitea'
+    ) {
+      const resolved = commitActionsTarget(
+        gitHubRepository,
+        this.props.accounts
+      )
+      const dispatcher = this.props.dispatcher
+      items.push({
+        label: __DARWIN__
+          ? 'View Actions for Commit…'
+          : 'View Actions for commit…',
+        enabled: resolved !== null,
+        // Capture the clicked commit and its History target. Selection, the
+        // Actions tab's selected remote, or a later row reorder cannot retarget it.
+        action: () => {
+          if (resolved !== null) {
+            dispatcher.showPopup({
+              type: PopupType.CommitActions,
+              target: resolved.target,
+              sha: commit.sha,
+            })
+          }
+        },
+      })
+    }
     return items
   }
 

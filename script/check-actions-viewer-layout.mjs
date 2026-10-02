@@ -19,6 +19,8 @@ for (const provider of ['github', 'gitea']) {
   fs.mkdirSync(output, { recursive: true })
   const sources = {
     reader: 'app/src/ui/actions/actions-run-dialog.tsx',
+    commit: 'app/src/ui/actions/commit-actions-dialog.tsx',
+    summary: 'app/src/lib/commit-actions.ts',
     runs: 'app/src/ui/actions/actions-runs.tsx',
     data: 'app/src/ui/actions/use-actions-data.ts',
     client: 'app/src/lib/actions-client.ts',
@@ -88,7 +90,7 @@ for (const provider of ['github', 'gitea']) {
       './http': { APIError: class extends Error {} },
       './remote-parsing': {},
     };
-    const aliases = {'./gitea-actions-client':'gitea','./endpoint-api-type-registry':'endpoint','../dialog':'dialog','./is-top-most':'topmost','../lib/select':'select','./use-actions-data':'data','../../lib/actions-client':'client'};
+    const aliases = {'./actions-run-dialog':'reader','../../lib/commit-actions':'summary','./gitea-actions-client':'gitea','./endpoint-api-type-registry':'endpoint','../dialog':'dialog','./is-top-most':'topmost','../lib/select':'select','./use-actions-data':'data','../../lib/actions-client':'client'};
     function load(name) {
       name = aliases[name] || name;
       if (Object.prototype.hasOwnProperty.call(mocks,name)) return mocks[name];
@@ -105,16 +107,18 @@ for (const provider of ['github', 'gitea']) {
       )},owner:'ViktorSMI',name:'desktop-plus',login:'ViktorSMI'};
     const run = {id:123,name:'CI',display_title:'Build desktop application — ' + 'long-branch-name-'.repeat(10),run_number:8,run_attempt:${
       provider === 'gitea' ? 'null' : '2'
-    },head_branch:'feature/actions-viewer',head_sha:'abc1234567890',event:'push',status:'in_progress',conclusion:null,created_at:'2026-01-01T00:00:00Z',updated_at:'2026-01-01T00:02:00Z',actor:{login:'ViktorSMI'}};
-    window.fail = false; window.opened = [];
+    },head_branch:'feature/actions-viewer',head_sha:'a'.repeat(40),event:'push',status:'in_progress',conclusion:null,created_at:'2026-01-01T00:00:00Z',updated_at:'2026-01-01T00:02:00Z',actor:{login:'ViktorSMI'}};
+    window.fail = false; window.opened = []; window.commitRunCount=2; window.commitRunReads=[];
     const api = {
       fetchActionsRuns: async () => ({total_count:30,workflow_runs:Array.from({length:30},(_,i)=>({...run,id:123+i,run_number:8+i}))}),
-      fetchActionsRun: async () => {if(window.fail) throw Error('network'); return run;},
+      fetchCommitActionsRuns: async (t,sha) => {window.commitRunReads.push({t,sha});return Array.from({length:window.commitRunCount},(_,i)=>({id:123+i,name:'Commit workflow '+i,number:8+i,workflow:'id:'+i,event:'push',branch:'main',attempt:1,status:'completed',conclusion:'success'}));},
+      fetchActionsRun: async (_target,id) => {if(window.fail) throw Error('network'); return {...run,id,run_number:8+id-123};},
       fetchActionsJobs: async () => ({total_count:25,jobs:Array.from({length:25},(_,i)=>({html_url:'https://gitea.test/prefix/ViktorSMI/desktop-plus/actions/runs/8/jobs/'+i,id:321+i,name:['Linux x64','Windows x64','macOS arm64'][i%3]+' job '+i,status:i?'queued':'in_progress',conclusion:null,started_at:null,completed_at:null,steps:Array.from({length:10},(_,n)=>({number:n+1,name:n===0?'Run yarn compile:prod with '+ 'long-step-name-'.repeat(20):'Test step '+n,status:n?'pending':'in_progress',conclusion:null,started_at:null,completed_at:null}))}))}),
       openInBrowser: url => window.opened.push(url),
     };
     const {DialogStackContext} = load('dialog');
     window.closeViewer = () => ReactDOM.unmountComponentAtNode(document.getElementById('modal'));
+    window.showCommit = () => ReactDOM.render(React.createElement(DialogStackContext.Provider,{value:{isTopMost:true}},React.createElement(load('commit').CommitActionsDialog,{target,sha:'a'.repeat(40),reader:api,onDismissed:closeViewer})),document.getElementById('modal'));
     window.showViewer = () => ReactDOM.render(React.createElement(DialogStackContext.Provider,{value:{isTopMost:true}},React.createElement(load('reader').ActionsRunDialog,{target,runId:123,reader:api,onDismissed:closeViewer,onBack:closeViewer})),document.getElementById('modal'));
     ReactDOM.render(React.createElement(load('runs').ActionsRuns,{target,reader:api,onSelect:showViewer}),document.getElementById('list'));
   `,
@@ -207,6 +211,62 @@ for (const provider of ['github', 'gitea']) {
     await page.waitForFunction(
       () => !document.querySelector('#actions-run-dialog [role=alert]')
     )
+    await page.keyboard.press('Escape')
+    await page.locator('#actions-run-dialog').waitFor({ state: 'detached' })
+    // Commit navigation must stay inside its SHA and resolve Gitea id/number correctly.
+    await page.evaluate(() => window.showCommit())
+    await page.locator('#commit-actions-dialog .actions-run').first().waitFor()
+    for (const width of [1000, 360]) {
+      await page.setViewportSize({ width, height: 600 })
+      const fits = await page.locator('#commit-actions-dialog').evaluate(el => {
+        const r = el.getBoundingClientRect()
+        return (
+          r.x >= 0 &&
+          r.right <= innerWidth &&
+          r.bottom <= innerHeight &&
+          el.scrollWidth <= el.clientWidth + 1
+        )
+      })
+      assert.ok(fits, 'Commit run chooser must fit narrow viewports')
+      await page.screenshot({
+        path: path.join(output, 'commit-runs-' + width + '.png'),
+      })
+    }
+    await page.locator('#commit-actions-dialog [data-run-id="124"]').click()
+    await page
+      .locator('#actions-run-dialog h1')
+      .filter({ hasText: 'CI #9' })
+      .waitFor()
+    await page.getByRole('button', { name: 'Open run in browser' }).click()
+    const opened = await page.evaluate(
+      () => window.opened[window.opened.length - 1]
+    )
+    assert.equal(
+      opened,
+      provider === 'gitea'
+        ? 'https://gitea.test/prefix/ViktorSMI/desktop-plus/actions/runs/9'
+        : 'https://github.com/ViktorSMI/desktop-plus/actions/runs/124'
+    )
+    await page.getByRole('button', { name: 'Back to commit runs' }).click()
+    assert.equal(
+      await page.locator('#commit-actions-dialog .actions-run').count(),
+      2
+    )
+    await page.getByRole('button', { name: 'Back to History' }).click()
+    await page.evaluate(() => {
+      window.commitRunCount = 1
+      window.showCommit()
+    })
+    await page
+      .locator('#actions-run-dialog h1')
+      .filter({ hasText: 'CI #8' })
+      .waitFor()
+    assert.ok(
+      await page.evaluate(() =>
+        window.commitRunReads.every(x => x.sha === 'a'.repeat(40))
+      )
+    )
+    await page.waitForTimeout(350)
     await page.keyboard.press('Escape')
     await page.locator('#actions-run-dialog').waitFor({ state: 'detached' })
     assert.deepEqual(errors, [])

@@ -30,7 +30,7 @@ import { Emoji } from '../../lib/emoji'
 import { enableAccessibleListToolTips } from '../../lib/feature-flag'
 import { TooltippedContent } from '../lib/tooltipped-content'
 import { formatDate } from '../../lib/format-date'
-import { CommitActionsStatus } from './commit-actions-status'
+import { CommitActionsStatus, OpenCommitActions } from './commit-actions-status'
 
 interface ICommitProps {
   readonly gitHubRepository: GitHubRepository | null
@@ -53,6 +53,7 @@ interface ICommitProps {
   readonly disableSquashing?: boolean
   readonly unpushedIndicatorTitle?: string
   readonly accounts: ReadonlyArray<Account>
+  readonly onOpenActions?: OpenCommitActions
   readonly dragSourceBranch?: Branch
   readonly preferAbsoluteDates: boolean
   /**
@@ -232,6 +233,7 @@ export class CommitListItem extends React.PureComponent<
             gitHubRepository={this.props.gitHubRepository}
             accounts={this.props.accounts}
             sha={this.props.commit.sha}
+            onOpenActions={this.props.onOpenActions}
           />
           {unpushedIndicator}
         </div>

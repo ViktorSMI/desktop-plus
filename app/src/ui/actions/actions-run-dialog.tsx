@@ -25,6 +25,9 @@ interface IActionsRunDialogProps {
   readonly reader: IActionsReader
   readonly onDismissed: () => void
   readonly onBack: () => void
+  readonly backLabel?: string
+  /** A commit entry point must never display a run from a different SHA. */
+  readonly expectedCommitSHA?: string
 }
 
 interface IRunDetails {
@@ -41,10 +44,19 @@ export function ActionsRunDialog({
   reader,
   onDismissed,
   onBack,
+  backLabel = 'Back to Actions',
+  expectedCommitSHA,
 }: IActionsRunDialogProps) {
   const [page, setPage] = React.useState(1)
   const load = React.useCallback(async () => {
     const run = await reader.fetchActionsRun(target, runId)
+    if (
+      expectedCommitSHA !== undefined &&
+      (run.id !== runId ||
+        run.head_sha.toLowerCase() !== expectedCommitSHA.toLowerCase())
+    ) {
+      throw new Error('Actions run does not belong to the requested commit')
+    }
     const jobs = await reader.fetchActionsJobs(
       target,
       runId,
@@ -52,9 +64,9 @@ export function ActionsRunDialog({
       page
     )
     return { run, page: jobs }
-  }, [reader, target, runId, page])
+  }, [reader, target, runId, page, expectedCommitSHA])
   const result = useActionsData(
-    `${actionsTargetKey(target)}:${runId}:${page}`,
+    `${actionsTargetKey(target)}:${runId}:${page}:${expectedCommitSHA ?? ''}`,
     load,
     pollRun,
     target.provider
@@ -65,6 +77,9 @@ export function ActionsRunDialog({
   )
   const nextPage = React.useCallback(() => setPage(p => p + 1), [])
   const openRun = React.useCallback(() => {
+    if (expectedCommitSHA !== undefined && result.data === null) {
+      return
+    }
     reader.openInBrowser(
       result.data === null
         ? actionsWebURL(
@@ -73,7 +88,7 @@ export function ActionsRunDialog({
           )
         : actionsRunWebURL(target, result.data.run)
     )
-  }, [reader, target, runId, result.data])
+  }, [reader, target, runId, result.data, expectedCommitSHA])
   const openJob = React.useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       const id = Number(event.currentTarget.dataset.jobId)
@@ -106,7 +121,12 @@ export function ActionsRunDialog({
         <Button onClick={result.refresh} disabled={result.loading}>
           Refresh
         </Button>
-        <Button onClick={openRun}>Open run in browser</Button>
+        <Button
+          onClick={openRun}
+          disabled={expectedCommitSHA !== undefined && result.data === null}
+        >
+          Open run in browser
+        </Button>
       </div>
       <div
         className={`dialog-content actions-run-content ${DialogPreferredFocusClassName}`}
@@ -252,7 +272,7 @@ export function ActionsRunDialog({
         <span>
           Read only · Logs open on {actionsProviderName(target.provider)}
         </span>
-        <Button onClick={onBack}>Back to Actions</Button>
+        <Button onClick={onBack}>{backLabel}</Button>
       </div>
     </Dialog>
   )

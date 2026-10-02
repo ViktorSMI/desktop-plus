@@ -110,7 +110,8 @@
   border-top: var(--base-border);
 }
 
-dialog#actions-run-dialog {
+dialog#actions-run-dialog,
+dialog#commit-actions-dialog {
   box-sizing: border-box;
   width: min(960px, calc(100vw - 32px));
   min-width: 0;
@@ -201,5 +202,26 @@ dialog#actions-run-dialog {
     .actions-run-content {
       padding: var(--spacing);
     }
+  }
+}
+
+.commit-actions-status-button {
+  appearance: none;
+  display: flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--text-color);
+    outline-offset: -1px;
   }
 }

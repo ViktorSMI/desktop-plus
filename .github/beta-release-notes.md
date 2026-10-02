@@ -1,3 +1,13 @@
+## Open Actions from History
+
+Click a commit's Actions circle or right-click a single commit and choose **View Actions for commit…**. Both entry points open the built-in read-only Actions viewer for the full commit SHA and the same account/repository as History, independently of the remote selected in the Actions tab.
+
+A single matching workflow opens directly to its jobs and steps. Multiple workflows show a chooser containing the latest run/attempt for each workflow, event and branch, with **Back to commit runs** and **Back to History** navigation. No-run, access and network errors are shown explicitly rather than opening an unrelated latest run. Run details are checked against the requested SHA and run ID before jobs or browser links are enabled.
+
+The existing **Open run in browser** and job-log links remain available. Gitea uses its REST database ID for requests and its repository run number in browser URLs. Workflow names are rendered as text; provider-supplied URLs are not used for navigation.
+
+The circle is keyboard-accessible with Enter or Space. Clicking it does not select, drag, squash, or check out a commit, and right-click still opens the commit menu. The aligned status column, bounded in-memory badge cache, refresh policy, and force-push safeguards introduced in beta12/beta13 are retained. A deliberate navigation loads the current list of runs; merely rerendering or reopening fresh cached History rows does not trigger it.
+
 ## Aligned History indicators
 
 Actions circles and unpushed arrows now share the same right-hand alignment and vertical center in the History list. An empty Actions slot no longer shifts the push arrow left. When a commit has both indicators, both remain visible side by side. Tags, selected rows, long titles, and narrow History panels keep their layout.

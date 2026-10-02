@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Account } from '../../models/account'
+import { IActionsTarget } from '../../models/actions'
 import { GitHubRepository } from '../../models/github-repository'
 import { actionsTargetKey } from '../../lib/actions-client'
 import {
@@ -12,6 +13,14 @@ import { TooltippedContent } from '../lib/tooltipped-content'
 
 type Listener = (value: ICommitActionsSummary | undefined) => void
 export type CommitActionsSubscribe = (listener: Listener) => () => void
+export type OpenCommitActions = (target: IActionsTarget, sha: string) => void
+
+const stopRowEvent = (event: React.SyntheticEvent) => event.stopPropagation()
+const stopActivationKey = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.stopPropagation()
+  }
+}
 
 // The cache belongs to the account/repository, not to a virtual row or a layout.
 // Credentials remain inside the existing account/client, never in cache keys.
@@ -88,6 +97,7 @@ interface IObservedProps {
   readonly subscribe: CommitActionsSubscribe
   readonly repositoryName: string
   readonly getSnapshot?: () => ICommitActionsSummary | undefined
+  readonly onOpen?: () => void
 }
 
 /** Only visible, mounted rows in a visible window subscribe to the shared poll. */
@@ -95,6 +105,7 @@ export function ObservedCommitActionsStatus({
   subscribe,
   repositoryName,
   getSnapshot,
+  onOpen,
 }: IObservedProps) {
   const ref = React.useRef<HTMLSpanElement>(null)
   const [snapshot, setSnapshot] = React.useState<{
@@ -146,6 +157,20 @@ export function ObservedCommitActionsStatus({
   const value =
     getSnapshot?.() ??
     (snapshot?.subscribe === subscribe ? snapshot.value : undefined)
+  const open = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      // Ignore the second click of a double-click and macOS control-right-click.
+      if (event.button === 0 && event.detail < 2 && !event.ctrlKey) {
+        onOpen?.()
+      }
+    },
+    [onOpen]
+  )
+  const badge =
+    value === undefined ? null : (
+      <CommitActionsStatusBadge value={value} repositoryName={repositoryName} />
+    )
   return (
     <span
       ref={ref}
@@ -159,11 +184,23 @@ export function ObservedCommitActionsStatus({
         justifyContent: 'center',
       }}
     >
-      {value !== undefined && (
-        <CommitActionsStatusBadge
-          value={value}
-          repositoryName={repositoryName}
-        />
+      {onOpen !== undefined && value !== undefined && value.state !== 'none' ? (
+        <button
+          type="button"
+          className="commit-actions-status-button"
+          aria-label={`View Actions for this commit in ${repositoryName}: ${value.description}`}
+          aria-haspopup="dialog"
+          onClick={open}
+          onMouseDown={stopRowEvent}
+          onMouseUp={stopRowEvent}
+          onDoubleClick={stopRowEvent}
+          onKeyDown={stopActivationKey}
+          onKeyUp={stopActivationKey}
+        >
+          {badge}
+        </button>
+      ) : (
+        badge
       )}
     </span>
   )
@@ -173,12 +210,14 @@ interface IStatusProps {
   readonly gitHubRepository: GitHubRepository | null
   readonly accounts: ReadonlyArray<Account>
   readonly sha: string
+  readonly onOpenActions?: OpenCommitActions
 }
 
 export function CommitActionsStatus({
   gitHubRepository,
   accounts,
   sha,
+  onOpenActions,
 }: IStatusProps) {
   const resolved = commitActionsTarget(gitHubRepository, accounts)
   const account = resolved?.account
@@ -206,10 +245,18 @@ export function CommitActionsStatus({
     key,
     sha,
   ])
+  const open = React.useMemo(
+    () =>
+      target === undefined || onOpenActions === undefined
+        ? undefined
+        : () => onOpenActions(target, sha),
+    [key, sha, onOpenActions]
+  )
   return source === undefined || target === undefined ? null : (
     <ObservedCommitActionsStatus
       subscribe={source.subscribe}
       getSnapshot={source.getSnapshot}
+      onOpen={open}
       repositoryName={`${target.owner}/${target.name}`}
     />
   )

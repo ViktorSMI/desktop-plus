@@ -43,6 +43,8 @@ jobs:
         with:
           node-version: '24.19.0'
           arch: x64
+      - name: Prepare project test environment
+        run: yarn test:setup
       - name: Format and record exact candidate sources
         shell: bash
         run: |
@@ -60,6 +62,14 @@ jobs:
         run: |
           set -euo pipefail
           node script/test.mjs app/test/unit/commit-actions-*-test.ts app/test/unit/commit-actions-*-test.tsx app/test/unit/commit-actions-test.ts app/test/unit/actions-client-test.ts app/test/unit/actions-viewer-test.tsx app/test/unit/gitea-actions-client-test.ts 2>&1 | tee /tmp/navigation-validation/tests.log
+      - name: Save early unit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: commit-actions-navigation-unit-log
+          path: /tmp/navigation-validation/tests.log
+          retention-days: 7
+          if-no-files-found: warn
       - name: Lint and validate changelog
         if: ${{ !cancelled() }}
         shell: bash

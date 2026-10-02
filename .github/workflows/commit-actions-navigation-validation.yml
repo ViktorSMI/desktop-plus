@@ -9,18 +9,122 @@ permissions:
   contents: read
 
 jobs:
-  source:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    env:
+      ACTIONS_VIEWER_TEST_OUTPUT: /tmp/navigation-validation/viewer
+      HISTORY_INDICATOR_TEST_OUTPUT: /tmp/navigation-validation/history
     steps:
       - uses: actions/checkout@v7
         with:
+          submodules: recursive
           persist-credentials: false
-      - name: Export tracked public source only
-        run: git archive --format=tar.gz --output=/tmp/desktop-plus-source.tar.gz HEAD
+      - name: Apply the exact candidate patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat script/commit-actions-navigation.patch.gz.{0,1,2} > /tmp/navigation.patch.gz
+          echo '281275210b8f82eddf0ed0455238dba08d10b6dbca6ad9d25c7829f7ec18424d  /tmp/navigation.patch.gz' | sha256sum --check
+          gzip -dc /tmp/navigation.patch.gz > /tmp/navigation.patch
+          git apply --index /tmp/navigation.patch
+          mkdir -p /tmp/navigation-validation
+          git diff --cached --name-only > /tmp/navigation-validation/paths.txt
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: '24.19.0'
+          arch: x64
+      - name: Format and record exact candidate sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < /tmp/navigation-validation/paths.txt
+          node node_modules/prettier/bin-prettier.js --write "${FILES[@]}"
+          for file in "${FILES[@]}"; do
+            mkdir -p "/tmp/navigation-validation/source/$(dirname "$file")"
+            cp "$file" "/tmp/navigation-validation/source/$file"
+            echo "$(git hash-object "$file") $file" >> /tmp/navigation-validation/tested-blobs.txt
+          done
+      - name: Test navigation, entry points and all Actions cache regressions
+        timeout-minutes: 4
+        shell: bash
+        run: |
+          set -euo pipefail
+          node script/test.mjs app/test/unit/commit-actions-*-test.ts app/test/unit/commit-actions-*-test.tsx app/test/unit/commit-actions-test.ts app/test/unit/actions-client-test.ts app/test/unit/actions-viewer-test.tsx app/test/unit/gitea-actions-client-test.ts 2>&1 | tee /tmp/navigation-validation/tests.log
+      - name: Lint and validate changelog
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn lint 2>&1 | tee /tmp/navigation-validation/lint.log
+          yarn validate-changelog
+      - name: Production compilation and project typecheck
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn compile:prod 2>&1 | tee /tmp/navigation-validation/compile.log
+      - name: Install Chromium
+        if: ${{ !cancelled() }}
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Check actual badge click, keyboard, cached remounts and alignment
+        if: ${{ !cancelled() }}
+        run: node script/check-history-indicator-layout.mjs
+      - name: Check run chooser and direct navigation for GitHub and Gitea
+        if: ${{ !cancelled() }}
+        run: node script/check-actions-viewer-layout.mjs
+      - name: Save validation evidence and source bytes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: commit-actions-navigation-validation
+          path: /tmp/navigation-validation
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+
+  blobs:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: commit-actions-navigation-validation
+          path: verified
+      - name: Store verified source blobs without changing any branch or tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import base64, hashlib, json, os, pathlib, urllib.request
+          root = pathlib.Path('verified/source')
+          records = []
+          lines = pathlib.Path('verified/tested-blobs.txt').read_text().splitlines()
+          assert len(lines) == 18
+          for line in lines:
+              expected, name = line.split(' ', 1)
+              path = pathlib.PurePosixPath(name)
+              assert not path.is_absolute() and '..' not in path.parts
+              assert name.startswith(('app/', 'script/check-', '.github/beta-'))
+              data = root.joinpath(*path.parts).read_bytes()
+              actual = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+              assert actual == expected, name
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/blobs',
+                  data=json.dumps({'encoding': 'base64', 'content': base64.b64encode(data).decode()}).encode(),
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'},
+                  method='POST')
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  result = json.load(response)
+              assert result['sha'] == expected, name
+              records.append({'path': name, 'sha': expected, 'mode': '100644', 'type': 'blob'})
+          pathlib.Path('git-blobs.json').write_text(json.dumps(records, indent=2) + '\n')
       - uses: actions/upload-artifact@v7
         with:
-          name: commit-actions-navigation-source
-          path: /tmp/desktop-plus-source.tar.gz
-          retention-days: 3
+          name: commit-actions-navigation-git-blobs
+          path: git-blobs.json
+          retention-days: 7
           if-no-files-found: error

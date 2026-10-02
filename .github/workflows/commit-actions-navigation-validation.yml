@@ -1,0 +1,26 @@
+name: Commit Actions navigation validation
+
+on:
+  push:
+    branches:
+      - work/commit-actions-navigation
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Export tracked public source only
+        run: git archive --format=tar.gz --output=/tmp/desktop-plus-source.tar.gz HEAD
+      - uses: actions/upload-artifact@v7
+        with:
+          name: commit-actions-navigation-source
+          path: /tmp/desktop-plus-source.tar.gz
+          retention-days: 3
+          if-no-files-found: error

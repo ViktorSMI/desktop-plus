@@ -30,15 +30,23 @@ jobs:
           git apply --index /tmp/navigation.patch
           mkdir -p /tmp/navigation-validation
           git diff --cached --name-only > /tmp/navigation-validation/paths.txt
-      - name: Mark the test-only event spy as presentational
+      - name: Correct the test wrapper and isolate mock cleanup
         shell: python
         run: |
           from pathlib import Path
           path = Path('app/test/unit/commit-actions-entry-points-test.tsx')
           text = path.read_text()
-          old = '<div onClick={rowEvent}'
-          assert text.count(old) == 1
-          path.write_text(text.replace(old, '<div role="presentation" onClick={rowEvent}'))
+          edits = [
+              ('<div onClick={rowEvent}', '<div role="presentation" onClick={rowEvent}'),
+              ('  let restore: () => void\n', '  let restore: () => void\n  let restoreReader: () => void\n'),
+              ("    mock.method(CommitActionsClient.prototype, 'forCommit', async () => {", "    const read = mock.method(CommitActionsClient.prototype, 'forCommit', async () => {"),
+              ("    const { ipcRenderer } = await import('electron')", "    restoreReader = () => read.mock.restore()\n    const { ipcRenderer } = await import('electron')"),
+              ('    mock.restoreAll()', '    restoreReader()'),
+          ]
+          for old, new in edits:
+              assert text.count(old) == 1, old
+              text = text.replace(old, new)
+          path.write_text(text)
       - uses: ./.github/actions/setup-ci-environment
         with:
           node-version: '24.19.0'

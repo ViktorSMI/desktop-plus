@@ -30,6 +30,15 @@ jobs:
           git apply --index /tmp/navigation.patch
           mkdir -p /tmp/navigation-validation
           git diff --cached --name-only > /tmp/navigation-validation/paths.txt
+      - name: Mark the test-only event spy as presentational
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('app/test/unit/commit-actions-entry-points-test.tsx')
+          text = path.read_text()
+          old = '<div onClick={rowEvent}'
+          assert text.count(old) == 1
+          path.write_text(text.replace(old, '<div role="presentation" onClick={rowEvent}'))
       - uses: ./.github/actions/setup-ci-environment
         with:
           node-version: '24.19.0'
@@ -39,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t FILES < /tmp/navigation-validation/paths.txt
-          node node_modules/prettier/bin-prettier.js --write "${FILES[@]}"
+          node node_modules/prettier/bin-prettier.js --ignore-unknown --write "${FILES[@]}"
           for file in "${FILES[@]}"; do
             mkdir -p "/tmp/navigation-validation/source/$(dirname "$file")"
             cp "$file" "/tmp/navigation-validation/source/$file"

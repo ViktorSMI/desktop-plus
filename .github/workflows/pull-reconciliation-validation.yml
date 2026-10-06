@@ -44,7 +44,7 @@ jobs:
             cp "$file" "/tmp/reconciliation-validation/source/$file"
             echo "$(git hash-object "$file") $file" >> /tmp/reconciliation-validation/tested-blobs.txt
           done
-      - name: Test toolbar, normal Git reconciliation and existing safety behavior
+      - name: Test toolbar, Git reconciliation and safety
         timeout-minutes: 5
         shell: bash
         run: |
@@ -57,7 +57,7 @@ jobs:
           name: pull-reconciliation-tests
           path: /tmp/reconciliation-validation/tests.log
           retention-days: 7
-      - name: Verify the old fetch-only toolbar fails the reconciliation regressions
+      - name: Verify old toolbar fails reconciliation regressions
         shell: bash
         run: |
           set -euo pipefail

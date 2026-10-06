@@ -1,0 +1,140 @@
+name: Toolbar push safety validation
+
+on:
+  push:
+    branches:
+      - work/toolbar-push-safety
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 16
+          submodules: recursive
+          persist-credentials: false
+      - name: Apply exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat script/toolbar-safety.patch.gz.{0,1,2} > /tmp/toolbar.patch.gz
+          echo 'f7efa166fae6fecd06efc3a7c8b9bd3de493da83cd61126f30ea8e043cd83f0f  /tmp/toolbar.patch.gz' | sha256sum --check
+          gzip -dc /tmp/toolbar.patch.gz > /tmp/toolbar.patch
+          git apply --index /tmp/toolbar.patch
+          mkdir -p /tmp/toolbar-validation
+          git diff --cached --name-only > /tmp/toolbar-validation/paths.txt
+      - uses: ./.github/actions/setup-ci-environment
+        with:
+          node-version: '24.19.0'
+          arch: x64
+      - name: Prepare native test environment
+        run: yarn test:setup
+      - name: Format and record exact source bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < /tmp/toolbar-validation/paths.txt
+          node node_modules/prettier/bin-prettier.js --ignore-unknown --write "${FILES[@]}"
+          for file in "${FILES[@]}"; do
+            mkdir -p "/tmp/toolbar-validation/source/$(dirname "$file")"
+            cp "$file" "/tmp/toolbar-validation/source/$file"
+            echo "$(git hash-object "$file") $file" >> /tmp/toolbar-validation/tested-blobs.txt
+          done
+      - name: Test real toolbar, menu, Git safety and Actions regressions
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          node script/test.mjs app/test/unit/ui/push-pull-safety-test.tsx app/test/unit/main-process/push-command-safety-test.ts app/test/unit/main-process/menu-test.ts app/test/unit/ui/remote-actions-button-test.tsx app/test/unit/ui/remote-force-push-dialog-test.tsx app/test/unit/git/remote-force-push-test.ts app/test/unit/commit-actions-*-test.ts app/test/unit/commit-actions-*-test.tsx app/test/unit/commit-actions-test.ts 2>&1 | tee /tmp/toolbar-validation/tests.log
+      - name: Save early test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: toolbar-push-safety-tests
+          path: /tmp/toolbar-validation/tests.log
+          if-no-files-found: warn
+      - name: Check regressions reject the old primary button and shortcut
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILES=(app/src/ui/toolbar/push-pull-button.tsx app/src/ui/toolbar/push-pull-button-dropdown.tsx app/src/main-process/menu/build-default-menu.ts)
+          restore() { for file in "${FILES[@]}"; do cp "/tmp/toolbar-validation/source/$file" "$file"; done; }
+          trap restore EXIT
+          for file in "${FILES[@]}"; do git show b06d9da62cda6d5672d5f0a030ff78ac4384b564:"$file" > "$file"; done
+          CODE=0
+          timeout 120s env -u GITHUB_ACTIONS node script/test.mjs --test-name-pattern='changes the same habitual click|emits only normal push with rewrite=true' app/test/unit/ui/push-pull-safety-test.tsx app/test/unit/main-process/push-command-safety-test.ts > /tmp/toolbar-validation/before-tests.log 2>&1 || CODE=$?
+          cat /tmp/toolbar-validation/before-tests.log
+          test "$CODE" -eq 1
+          grep -E 'fail 3$' /tmp/toolbar-validation/before-tests.log
+          grep 'ERR_ASSERTION' /tmp/toolbar-validation/before-tests.log
+      - name: Lint and changelog
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn lint 2>&1 | tee /tmp/toolbar-validation/lint.log
+          yarn validate-changelog
+      - name: Production build and project typecheck
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          yarn compile:prod 2>&1 | tee /tmp/toolbar-validation/compile.log
+      - name: Save complete validation
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: toolbar-push-safety-validation
+          path: /tmp/toolbar-validation
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+
+  blobs:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: toolbar-push-safety-validation
+          path: verified
+      - name: Store verified blobs without updating branches or tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import base64, hashlib, json, os, pathlib, urllib.request
+          records = []
+          lines = pathlib.Path('verified/tested-blobs.txt').read_text().splitlines()
+          assert len(lines) == 8
+          for line in lines:
+              expected, name = line.split(' ', 1)
+              path = pathlib.PurePosixPath(name)
+              assert not path.is_absolute() and '..' not in path.parts
+              assert name.startswith(('app/', '.github/beta-'))
+              data = pathlib.Path('verified/source').joinpath(*path.parts).read_bytes()
+              actual = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+              assert actual == expected, name
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/blobs',
+                  data=json.dumps({'encoding': 'base64', 'content': base64.b64encode(data).decode()}).encode(),
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'}, method='POST')
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  result = json.load(response)
+              assert result['sha'] == expected, name
+              records.append({'path': name, 'sha': expected, 'mode': '100644', 'type': 'blob'})
+          pathlib.Path('git-blobs.json').write_text(json.dumps(records, indent=2) + '\n')
+      - uses: actions/upload-artifact@v7
+        with:
+          name: toolbar-push-safety-blobs
+          path: git-blobs.json
+          retention-days: 7
+          if-no-files-found: error

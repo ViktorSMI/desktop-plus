@@ -131,8 +131,8 @@ describe('ordinary push/pull/fetch toolbar safety', () => {
         aheadBehind: { ahead: 2, behind: 1 },
         forcePushBranchState: ForcePushBranchState.Recommended,
       },
-      title: 'Fetch origin',
-      action: 'fetch',
+      title: 'Pull origin',
+      action: 'pull',
     },
     {
       name: 'rewritten history and pending tags',
@@ -141,8 +141,24 @@ describe('ordinary push/pull/fetch toolbar safety', () => {
         numTagsToPush: 3,
         forcePushBranchState: ForcePushBranchState.Recommended,
       },
-      title: 'Fetch origin',
-      action: 'fetch',
+      title: 'Pull origin',
+      action: 'pull',
+    },
+    {
+      name: 'rewritten history with configured rebase',
+      overrides: {
+        aheadBehind: { ahead: 2, behind: 1 },
+        pullWithRebase: true,
+        forcePushBranchState: ForcePushBranchState.Recommended,
+      },
+      title: 'Pull origin with rebase',
+      action: 'pull',
+    },
+    {
+      name: 'reconciled history with a stale rewrite hint',
+      overrides: { forcePushBranchState: ForcePushBranchState.Recommended },
+      title: 'Push origin',
+      action: 'push',
     },
     {
       name: 'two remote synchronization',
@@ -173,7 +189,7 @@ describe('ordinary push/pull/fetch toolbar safety', () => {
     })
   }
 
-  it('changes the same habitual click to fetch-only after a rewrite and back to normal push after reconciliation', () => {
+  it('reconciles rewritten history through Pull then ordinary Push instead of getting stuck on Fetch', () => {
     const { props, calls, mainButton, view } = fixture()
     fireEvent.click(mainButton())
     const rewritten: Props = {
@@ -185,16 +201,33 @@ describe('ordinary push/pull/fetch toolbar safety', () => {
       view.rerender(<PushPullButton {...rewritten} lastFetched={new Date(i)} />)
       assert.equal(
         mainButton().querySelector('.title')?.textContent,
-        'Fetch origin'
+        'Pull origin'
       )
-      assert.match(mainButton().textContent ?? '', /History rewritten/)
+      assert.doesNotMatch(
+        mainButton().textContent ?? '',
+        /History rewritten|force push/i
+      )
       fireEvent.click(mainButton())
     }
-    view.rerender(<PushPullButton {...props} />)
+    view.rerender(
+      <PushPullButton {...rewritten} aheadBehind={{ ahead: 3, behind: 0 }} />
+    )
+    assert.equal(
+      mainButton().querySelector('.title')?.textContent,
+      'Push origin'
+    )
+    fireEvent.click(mainButton())
+    view.rerender(
+      <PushPullButton {...rewritten} aheadBehind={{ ahead: 0, behind: 0 }} />
+    )
+    assert.equal(
+      mainButton().querySelector('.title')?.textContent,
+      'Fetch origin'
+    )
     fireEvent.click(mainButton())
     assert.deepEqual(
       calls.map(c => c.action),
-      ['push', ...Array(25).fill('fetch'), 'push']
+      ['push', ...Array(25).fill('pull'), 'push', 'fetch']
     )
   })
 
@@ -246,7 +279,7 @@ describe('ordinary push/pull/fetch toolbar safety', () => {
     assert.deepEqual(calls, [])
   })
 
-  it('shows existing operation progress as disabled, then returns to fetch-only', () => {
+  it('shows existing operation progress as disabled, then resumes normal Pull', () => {
     const { props, calls, mainButton, view } = fixture({
       aheadBehind: { ahead: 2, behind: 1 },
       forcePushBranchState: ForcePushBranchState.Recommended,
@@ -271,8 +304,8 @@ describe('ordinary push/pull/fetch toolbar safety', () => {
     fireEvent.click(mainButton())
     assert.deepEqual(calls, [
       {
-        action: 'fetch',
-        args: [props.repository, FetchType.UserInitiatedTask],
+        action: 'pull',
+        args: [props.repository],
       },
     ])
   })

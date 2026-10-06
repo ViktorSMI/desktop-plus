@@ -1,10 +1,10 @@
-## Ordinary toolbar actions never become Force push
+## Ordinary Pull then Push, including rewritten local history
 
-The main Fetch / Pull / Push button no longer turns into Force push after amending, rebasing, squashing or reordering published commits. When Desktop detects rewritten, diverged history, the primary action stays **Fetch** with a review notice. It only fetches; it does not push, pull, merge or reset that branch automatically.
+The main Fetch / Pull / Push control no longer stops at a fetch-only "History rewritten" state. A branch with incoming commits offers the normal **Pull** action, including after amend, rebase, squash or reorder. Pull integrates using the repository's existing merge/rebase configuration and conflict-resolution flow. Once reconciled, the next ordinary action is **Push**; when up to date it is **Fetch**. There is no automatic push after a pull.
 
-Force push is also removed from this toolbar button's dropdown. **Repository > Push** and **Ctrl/Cmd+P** always request an ordinary push, regardless of rewrite state or the old confirmation preference. Normal Fetch, Pull, Push, publishing, progress and non-forcing Sync remotes remain available.
+The main button, its dropdown, **Repository > Push** and **Ctrl/Cmd+P** do not turn into Force push. No automatic force push or hard reset is introduced. Explicit fast-forward-only policies are not overridden; conflicts and rejected pushes still require review. Merge preserves the old published commits as well as the integrated work; this flow does not replace published history with a rewritten local copy.
 
-To deliberately replace remote history, use **Current branch > More remote actions (⋯) > Force push <remote>/<branch>…**. The separate remote confirmation still requires typing the destination and retains its pinned local commit, expected remote commit and explicit force-with-lease checks. No force push was performed to release this change.
+Intentional remote-history replacement remains a separate advanced action under **Current branch > More remote actions (⋯)** with typed destination confirmation and the existing explicit lease safeguards. The Actions badges, cache, navigation and binary diff are unchanged.
 
 ## Open Actions from History
 

@@ -78,7 +78,7 @@ interface IPushPullButtonProps {
   /** Is the detached HEAD state related to a rebase or not? */
   readonly rebaseInProgress: boolean
 
-  /** Force push state of the current branch */
+  /** Legacy rewrite state; ordinary actions depend only on ahead/behind. */
   readonly forcePushBranchState: ForcePushBranchState
 
   /** Whether this component should show its onboarding tutorial nudge arrow */
@@ -378,7 +378,6 @@ export class PushPullButton extends React.Component<
       rebaseInProgress,
       lastFetched,
       pullWithRebase,
-      forcePushBranchState,
     } = this.props
 
     if (progress !== null) {
@@ -419,10 +418,9 @@ export class PushPullButton extends React.Component<
       return this.fetchButton(remoteName, lastFetched, this.fetch)
     }
 
-    if (forcePushBranchState === ForcePushBranchState.Recommended) {
-      return this.rewrittenHistoryButton(remoteName, aheadBehind, numTagsToPush)
-    }
-
+    // Reconcile any divergence through the normal Pull path (merge/rebase
+    // according to Git configuration), including previously rewritten commits.
+    // Neither the rewrite hint nor this habitual click can request a force push.
     if (behind > 0) {
       return this.pullButton(
         remoteName,
@@ -626,26 +624,6 @@ export class PushPullButton extends React.Component<
       >
         {renderAheadBehind(aheadBehind, numTagsToPush)}
       </ToolbarDropdown>
-    )
-  }
-
-  /** Never turn a habitual click into remote history replacement after a rewrite. */
-  private rewrittenHistoryButton(
-    remoteName: string,
-    aheadBehind: IAheadBehind,
-    numTagsToPush: number
-  ) {
-    return (
-      <ToolbarButton
-        {...this.defaultButtonProps()}
-        title={`Fetch ${remoteName}`}
-        description="History rewritten — review before pushing"
-        tooltip="Fetch only. To replace remote history, use Current branch > More remote actions."
-        icon={syncClockwise}
-        onClick={this.fetch}
-      >
-        {renderAheadBehind(aheadBehind, numTagsToPush)}
-      </ToolbarButton>
     )
   }
 }

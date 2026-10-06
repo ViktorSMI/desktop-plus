@@ -28,6 +28,19 @@ jobs:
           git apply --index /tmp/toolbar.patch
           mkdir -p /tmp/toolbar-validation
           git diff --cached --name-only > /tmp/toolbar-validation/paths.txt
+      - name: Use asynchronous setup with the CommonJS test runner
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('app/test/unit/main-process/push-command-safety-test.ts')
+          text = path.read_text()
+          old = "const { buildDefaultMenuTemplate } = await import('../../../src/main-process/menu')"
+          assert text.count(old) == 1
+          replacement = "let menu: typeof import('../../../src/main-process/menu')\nbefore(async () => {\n  menu = await import('../../../src/main-process/menu')\n})"
+          text = text.replace(old, replacement)
+          text = text.replace("{ describe, it, mock }", "{ before, describe, it, mock }")
+          text = text.replace('const template = buildDefaultMenuTemplate(', 'const template = menu.buildDefaultMenuTemplate(')
+          path.write_text(text)
       - uses: ./.github/actions/setup-ci-environment
         with:
           node-version: '24.19.0'

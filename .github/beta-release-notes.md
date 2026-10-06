@@ -1,3 +1,11 @@
+## Ordinary toolbar actions never become Force push
+
+The main Fetch / Pull / Push button no longer turns into Force push after amending, rebasing, squashing or reordering published commits. When Desktop detects rewritten, diverged history, the primary action stays **Fetch** with a review notice. It only fetches; it does not push, pull, merge or reset that branch automatically.
+
+Force push is also removed from this toolbar button's dropdown. **Repository > Push** and **Ctrl/Cmd+P** always request an ordinary push, regardless of rewrite state or the old confirmation preference. Normal Fetch, Pull, Push, publishing, progress and non-forcing Sync remotes remain available.
+
+To deliberately replace remote history, use **Current branch > More remote actions (⋯) > Force push <remote>/<branch>…**. The separate remote confirmation still requires typing the destination and retains its pinned local commit, expected remote commit and explicit force-with-lease checks. No force push was performed to release this change.
+
 ## Open Actions from History
 
 Click a commit's Actions circle or right-click a single commit and choose **View Actions for commit…**. Both entry points open the built-in read-only Actions viewer for the full commit SHA and the same account/repository as History, independently of the remote selected in the Actions tab.
@@ -18,7 +26,7 @@ The prominent red Force push button has been removed from the branch picker's re
 
 Choosing Force push only opens the existing destination/commit confirmation. For a selected remote, the final button is disabled until the exact **remote/branch** is typed. Cancel remains the safe default. A changed confirmation snapshot invalidates the typed consent, and callbacks from an obsolete or closed remote menu cannot act on a different selection.
 
-The existing explicit `--force-with-lease=<ref>:<expected commit>` safeguard is retained: unexpected remote commits reject the push, and the approved local commit and destination are checked again before execution. Other remotes, tags, and upstream configuration are not rewritten. Force push still deliberately replaces the reviewed branch history; the extra confirmation does not make it a non-destructive operation. The separate upstream-toolbar force-push flow is unchanged.
+The existing explicit `--force-with-lease=<ref>:<expected commit>` safeguard is retained: unexpected remote commits reject the push, and the approved local commit and destination are checked again before execution. Other remotes, tags, and upstream configuration are not rewritten. Force push still deliberately replaces the reviewed branch history; the extra confirmation does not make it a non-destructive operation.
 
 ## Cache behavior
 

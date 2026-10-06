@@ -92,9 +92,6 @@ interface IPushPullButtonProps {
   /** Whether or not the push-pull dropdown is currently open */
   readonly isDropdownOpen: boolean
 
-  /** Will the app prompt the user to confirm a force push? */
-  readonly askForConfirmationOnForcePush: boolean
-
   /** Whether the dropdown will trap focus or not. Defaults to true.
    *
    * Example of usage: If a dropdown is open and then a dialog subsequently, the
@@ -116,7 +113,7 @@ interface IPushPullButtonProps {
   readonly onDropdownStateChanged: (state: DropdownState) => void
 }
 
-type ActionInProgress = 'push' | 'pull' | 'fetch' | 'force push'
+type ActionInProgress = 'push' | 'pull' | 'fetch'
 
 interface IPushPullButtonState {
   readonly screenReaderStateMessage: string | null
@@ -125,7 +122,6 @@ interface IPushPullButtonState {
 
 export enum DropdownItemType {
   Fetch = 'fetch',
-  ForcePush = 'force-push',
   ResetAndPull = 'reset-and-pull',
 }
 
@@ -174,21 +170,6 @@ function renderLastFetched(lastFetched: Date | null): JSX.Element | string {
   } else {
     return 'Never fetched'
   }
-}
-
-/**
- * This represents the "double arrow" icon used to show a force-push, and is a
- * less complicated icon than the generated Octicon from the `octicons` package.
- */
-export const forcePushIcon: OcticonSymbolVariant = {
-  w: 10,
-  h: 16,
-  p: [
-    'M0 6a.75.75 0 0 0 .974.714L4.469 3.22a.75.75 0 0 1 1.06 0l3.478 3.478a.75.75 ' +
-      '0 0 0 .772-1.228L5.53 1.22a.75.75 0 0 0-1.06 0L.22 5.47A.75.75 0 0 0 0 6zm0 ' +
-      '3a.75.75 0 0 0 1.28.53l2.97-2.97V14a.75.75 0 1 0 1.5 0V6.56l2.97 2.97a.75.75 ' +
-      '0 0 0 1.06-1.06L5.53 4.22a.75.75 0 0 0-1.06 0L.22 8.47A.75.75 0 0 0 0 9z',
-  ],
 }
 
 /**
@@ -302,81 +283,6 @@ export class PushPullButton extends React.Component<
     this.props.dispatcher.syncRemotes(this.props.repository)
   }
 
-  /**
-   * The dropdown focus trap has logic to set the document.ActiveElement to the
-   * html element (in this case the dropdown button) that was clicked to
-   * activate the focus trap. It also has a returnFocusOnDeactivate prop that is
-   * true by default, but can be set to false to prevent this behavior.
-   *
-   * In the case of force push that opens a confirm dialog, we want to set the
-   * focus to the aria live container and therefore we set
-   * returnFocusOnDeactivate to false. We also provided the onDeactivate
-   * callback of the focus trap to set that focus. See more details in
-   * setScreenReaderStateMessageFocus()
-   *
-   * @returns true - (default behavior) if not force push, or if force and confirmation is off
-   * @returns false -if force push and confirmation is on, so we can manage focus ourselves
-   * */
-  private returnFocusOnDeactivate = () => {
-    const isForcePushOptionAvailable =
-      this.props.forcePushBranchState !== ForcePushBranchState.NotAvailable
-
-    return (
-      !isForcePushOptionAvailable || !this.props.askForConfirmationOnForcePush
-    )
-  }
-
-  /**
-   * In the case of force push that opens a confirm dialog, we want to set the
-   * focus to the aria live container and we do so on the onDeactivate callback
-   * of the focus trap to set that focus. Additionally, we set
-   * returnFocusOnDeactivate to false to prevent the dropdowns focus traps
-   * default focus management.  See more details in
-   * setScreenReaderStateMessageFocus()*/
-  private onDropdownFocusTrapDeactivate = () => {
-    if (this.returnFocusOnDeactivate()) {
-      return
-    }
-
-    this.setScreenReaderStateMessageFocus()
-  }
-
-  /**
-   * This is a hack to get the screen reader to read the message after the force
-   * push confirm dialog closes.
-   *
-   * Problem: The dialog component sets the focus back to what ever was in the
-   * `document.ActiveElement` when the dialog was opened. However the active
-   * element is the force push button that is replaced with the fetch button.
-   * Thus, the force push element is no longer present when the dialog closes
-   * and the focus defaults to the document body. This means the sr message is
-   * not read.
-   *
-   * Solution: Set the `document.ActiveElement` to an element containing the sr
-   * element before opening the dialog so that it returns the focus to an
-   * element containing the sr. You can do this by calling the `focus` element
-   * of a tab focusable element hence adding the tab index.
-   *
-   * Other notes: If I set the focus to the sr element directly, it causes the
-   * message to be read twice.
-   */
-  private setScreenReaderStateMessageFocus() {
-    const srElement = document.getElementById('push-pull-button-state')
-    if (srElement) {
-      srElement.tabIndex = -1
-      srElement.focus()
-    }
-  }
-
-  private forcePushWithLease = () => {
-    this.closeDropdown()
-
-    this.setScreenReaderStateMessageFocus()
-    this.props.dispatcher.confirmOrForcePush(this.props.repository)
-
-    this.setState({ actionInProgress: 'force push' })
-  }
-
   private resetAndPull = () => {
     this.closeDropdown()
     this.props.dispatcher.resetAndPull(this.props.repository)
@@ -423,11 +329,7 @@ export class PushPullButton extends React.Component<
           itemTypes={itemTypes}
           remoteName={this.props.remoteName}
           fetch={this.fetch}
-          forcePushWithLease={this.forcePushWithLease}
           resetAndPull={this.resetAndPull}
-          askForConfirmationOnForcePush={
-            this.props.askForConfirmationOnForcePush
-          }
         />
       )
     }
@@ -518,13 +420,7 @@ export class PushPullButton extends React.Component<
     }
 
     if (forcePushBranchState === ForcePushBranchState.Recommended) {
-      return this.forcePushButton(
-        remoteName,
-        aheadBehind,
-        numTagsToPush,
-        lastFetched,
-        this.forcePushWithLease
-      )
+      return this.rewrittenHistoryButton(remoteName, aheadBehind, numTagsToPush)
     }
 
     if (behind > 0) {
@@ -534,7 +430,6 @@ export class PushPullButton extends React.Component<
         numTagsToPush,
         lastFetched,
         pullWithRebase || false,
-        forcePushBranchState,
         this.pull
       )
     }
@@ -683,7 +578,6 @@ export class PushPullButton extends React.Component<
     numTagsToPush: number,
     lastFetched: Date | null,
     pullWithRebase: boolean,
-    forcePushBranchState: ForcePushBranchState,
     onClick: () => void
   ) {
     const title = pullWithRebase
@@ -691,10 +585,6 @@ export class PushPullButton extends React.Component<
       : `Pull ${remoteName}`
 
     const dropdownItemTypes = [DropdownItemType.Fetch]
-
-    if (forcePushBranchState !== ForcePushBranchState.NotAvailable) {
-      dropdownItemTypes.push(DropdownItemType.ForcePush)
-    }
 
     if (aheadBehind.ahead > 0) {
       dropdownItemTypes.push(DropdownItemType.ResetAndPull)
@@ -710,8 +600,6 @@ export class PushPullButton extends React.Component<
         dropdownContentRenderer={this.getDropdownContentRenderer(
           dropdownItemTypes
         )}
-        returnFocusOnDeactivate={this.returnFocusOnDeactivate()}
-        onDropdownFocusTrapDeactivate={this.onDropdownFocusTrapDeactivate}
       >
         {renderAheadBehind(aheadBehind, numTagsToPush)}
       </ToolbarDropdown>
@@ -741,27 +629,23 @@ export class PushPullButton extends React.Component<
     )
   }
 
-  private forcePushButton(
+  /** Never turn a habitual click into remote history replacement after a rewrite. */
+  private rewrittenHistoryButton(
     remoteName: string,
     aheadBehind: IAheadBehind,
-    numTagsToPush: number,
-    lastFetched: Date | null,
-    onClick: () => void
+    numTagsToPush: number
   ) {
     return (
-      <ToolbarDropdown
-        {...this.defaultDropdownProps()}
-        title={`Force push ${remoteName}`}
-        description={renderLastFetched(lastFetched)}
-        icon={forcePushIcon}
-        onClick={onClick}
-        dropdownContentRenderer={this.getDropdownContentRenderer([
-          DropdownItemType.Fetch,
-          DropdownItemType.ResetAndPull,
-        ])}
+      <ToolbarButton
+        {...this.defaultButtonProps()}
+        title={`Fetch ${remoteName}`}
+        description="History rewritten — review before pushing"
+        tooltip="Fetch only. To replace remote history, use Current branch > More remote actions."
+        icon={syncClockwise}
+        onClick={this.fetch}
       >
         {renderAheadBehind(aheadBehind, numTagsToPush)}
-      </ToolbarDropdown>
+      </ToolbarButton>
     )
   }
 }

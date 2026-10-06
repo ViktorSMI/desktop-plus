@@ -43,11 +43,9 @@ export function buildDefaultMenu(params: MenuLabelsEvent): Electron.Menu {
 export function buildDefaultMenuTemplate({
   selectedExternalEditor,
   selectedShell,
-  askForConfirmationOnForcePush,
   askForConfirmationOnRepositoryRemoval,
   hasCurrentPullRequest = false,
   contributionTargetDefaultBranch = defaultBranchNameValue,
-  isForcePushForCurrentRepository = false,
   isStashedChangesVisible = false,
   askForConfirmationWhenStashingAllChanges = true,
   gitHubRepositoryType,
@@ -334,22 +332,17 @@ export function buildDefaultMenuTemplate({
     ],
   })
 
-  const pushLabel = getPushLabel(
-    isForcePushForCurrentRepository,
-    askForConfirmationOnForcePush
-  )
-
-  const pushEventType = isForcePushForCurrentRepository ? 'force-push' : 'push'
-
+  // The ordinary Push command and its shortcut must never escalate to force
+  // push after amending/rebasing. History replacement lives in the remote menu.
   template.push({
     label: __DARWIN__ ? 'Repository' : '&Repository',
     id: 'repository',
     submenu: [
       {
         id: 'push',
-        label: pushLabel,
+        label: __DARWIN__ ? 'Push' : 'P&ush',
         accelerator: 'CmdOrCtrl+P',
-        click: emit(pushEventType),
+        click: emit('push'),
       },
       {
         id: 'pull',
@@ -650,21 +643,6 @@ export function buildDefaultMenuTemplate({
   ensureItemIds(template)
 
   return template
-}
-
-function getPushLabel(
-  isForcePushForCurrentRepository: boolean,
-  askForConfirmationOnForcePush: boolean
-): string {
-  if (!isForcePushForCurrentRepository) {
-    return __DARWIN__ ? 'Push' : 'P&ush'
-  }
-
-  if (askForConfirmationOnForcePush) {
-    return __DARWIN__ ? 'Force Push…' : 'Force P&ush…'
-  }
-
-  return __DARWIN__ ? 'Force Push' : 'Force P&ush'
 }
 
 function getStashedChangesLabel(isStashedChangesVisible: boolean): string {

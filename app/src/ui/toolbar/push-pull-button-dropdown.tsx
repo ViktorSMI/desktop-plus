@@ -5,7 +5,6 @@ import {
   DropdownItem,
   DropdownItemClassName,
   DropdownItemType,
-  forcePushIcon,
   resetAndPullIcon,
 } from './push-pull-button'
 
@@ -14,11 +13,7 @@ interface IPushPullButtonDropDownProps {
   /** The name of the remote. */
   readonly remoteName: string | null
 
-  /** Will the app prompt the user to confirm a force push? */
-  readonly askForConfirmationOnForcePush: boolean
-
   readonly fetch: () => void
-  readonly forcePushWithLease: () => void
   readonly resetAndPull: () => void
 }
 
@@ -78,28 +73,6 @@ export class PushPullButtonDropDown extends React.Component<IPushPullButtonDropD
           action: this.props.fetch,
           icon: syncClockwise,
         }
-      case DropdownItemType.ForcePush: {
-        const forcePushWarning = this.props
-          .askForConfirmationOnForcePush ? null : (
-          <div className="warning">
-            <span className="warning-title">Warning:</span> A force push will
-            rewrite history on the remote. Any collaborators working on this
-            branch will need to reset their own local branch to match the
-            history of the remote.
-          </div>
-        )
-        return {
-          title: `Force push ${remoteName}`,
-          description: (
-            <>
-              Overwrite any changes on {remoteName} with your local changes
-              {forcePushWarning}
-            </>
-          ),
-          action: this.props.forcePushWithLease,
-          icon: forcePushIcon,
-        }
-      }
       case DropdownItemType.ResetAndPull:
         return {
           title: 'Reset and pull',

@@ -4137,7 +4137,6 @@ export class App extends React.Component<IAppProps, IAppState> {
           this.state.currentOnboardingTutorialStep === TutorialStep.PushBranch
         }
         isDropdownOpen={isDropdownOpen}
-        askForConfirmationOnForcePush={this.state.askForConfirmationOnForcePush}
         onDropdownStateChanged={this.onPushPullDropdownStateChanged}
         enableFocusTrap={enableFocusTrap}
         pushPullButtonWidth={this.state.pushPullButtonWidth}

@@ -9,7 +9,7 @@ import { Branch, IAheadBehind } from '../../models/branch'
 import { BranchesTab } from '../../models/branches-tab'
 import { FetchType } from '../../models/fetch'
 import { PopupType } from '../../models/popup'
-import { ForkedRemotePrefix, IRemote } from '../../models/remote'
+import { getUserRemotes, IRemote } from '../../models/remote'
 import { Account } from '../../models/account'
 
 import { Dispatcher } from '../dispatcher'
@@ -480,9 +480,7 @@ export class BranchesContainer extends React.Component<
   }
 
   private get userRemotes() {
-    return this.state.remotes.filter(
-      remote => !remote.name.startsWith(ForkedRemotePrefix)
-    )
+    return getUserRemotes(this.state.remotes)
   }
 
   private get syncRemotesEnabled() {
@@ -504,7 +502,10 @@ export class BranchesContainer extends React.Component<
   }
 
   private renderRemoteSwitcher = () => {
-    if (this.state.loadingRemotes || this.state.remotes.length < 2) {
+    if (
+      this.state.loadingRemotes ||
+      (this.state.remotes.length < 2 && !this.syncRemotesEnabled)
+    ) {
       return null
     }
 
@@ -569,7 +570,7 @@ export class BranchesContainer extends React.Component<
           </div>
         )}
 
-        {this.userRemotes.length === 2 && (
+        {(this.userRemotes.length === 2 || this.syncRemotesEnabled) && (
           <div className="remote-sync-preference">
             <Checkbox
               value={
@@ -577,7 +578,11 @@ export class BranchesContainer extends React.Component<
               }
               onChange={this.onSyncRemotesChanged}
               disabled={isBusy}
-              label={`Sync ${this.userRemotes[0].name} ↔ ${this.userRemotes[1].name} with toolbar`}
+              label={
+                this.userRemotes.length === 2
+                  ? `Sync ${this.userRemotes[0].name} ↔ ${this.userRemotes[1].name} with toolbar`
+                  : 'Sync with toolbar (requires exactly two user remotes)'
+              }
             />
           </div>
         )}

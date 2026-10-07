@@ -30,3 +30,12 @@ export function remoteEquals(x: IRemote | null, y: IRemote | null) {
 
   return x.name === y.name && x.url === y.url
 }
+
+/** User-configured remotes, excluding temporary pull-request remotes. */
+export function getUserRemotes(remotes: ReadonlyArray<IRemote>) {
+  return remotes.filter(remote => !remote.name.startsWith(ForkedRemotePrefix))
+}
+
+export function canSyncRemotes(remotes: ReadonlyArray<IRemote>) {
+  return getUserRemotes(remotes).length === 2
+}

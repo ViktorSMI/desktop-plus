@@ -22,6 +22,8 @@ const IssueMarkdownCSS = `
 
 interface IIssueDetailProps {
   readonly repository: GitHubRepository
+  readonly onRetryComments: () => void
+  readonly loading: boolean
   readonly details: IAPIIssueDetails
   readonly dispatcher: Dispatcher
   readonly emoji: Map<string, Emoji>
@@ -74,13 +76,13 @@ export class IssueDetail extends React.Component<
         onMarkdownLinkClicked={this.onMarkdownLinkClicked}
         underlineLinks={this.props.underlineLinks}
         customCSS={IssueMarkdownCSS}
-        ariaLabel={ariaLabel}
+        title={ariaLabel}
       />
     )
   }
 
   public render() {
-    const { issue, comments } = this.props.details
+    const { issue, comments, commentsError } = this.props.details
     const body = issue.body?.trim() ? issue.body : '_No description provided._'
     const closed = issue.state === 'closed'
     const visibleComments = comments.slice(0, this.state.visibleComments)
@@ -103,9 +105,23 @@ export class IssueDetail extends React.Component<
           {this.renderMarkdown(body, 'Issue description')}
         </div>
         <h2 className="issue-comments-heading" tabIndex={-1}>
-          Comments ({comments.length})
+          Comments{!commentsError && ` (${comments.length})`}
         </h2>
-        {comments.length === 0 && (
+        {commentsError && (
+          <div role="alert">
+            <p>
+              Unable to load comments. Check your connection and account access,
+              then try again.
+            </p>
+            <Button
+              onClick={this.props.onRetryComments}
+              disabled={this.props.loading}
+            >
+              Retry comments
+            </Button>
+          </div>
+        )}
+        {!commentsError && comments.length === 0 && (
           <p className="issue-no-comments">No comments yet.</p>
         )}
         {visibleComments.map(comment => (

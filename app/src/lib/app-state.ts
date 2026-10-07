@@ -365,6 +365,9 @@ export interface IAppState {
    */
   readonly showConventionalCommitBadges: boolean
 
+  /** Whether to show the worktree dropdown even without linked worktrees. */
+  readonly alwaysShowWorktreeList: boolean
+
   /**
    * A map keyed on a user account (GitHub.com or GitHub Enterprise)
    * containing an object with repositories that the authenticated
@@ -425,6 +428,9 @@ export interface IAppState {
   readonly customShell: ICustomIntegration | null
 
   readonly branchPresetScript: ICustomIntegration | null
+
+  /** User-configured path to the GitHub Copilot app, or null for auto-detection. */
+  readonly copilotAppPath: string | null
 
   /**
    * Whether or not the CI status popover is visible.
@@ -645,6 +651,9 @@ export interface IRepositoryState {
 
   /** The remote currently associated with the repository, if defined in the configuration */
   readonly remote: IRemote | null
+
+  /** Configured remotes from the latest repository refresh. */
+  readonly remotes: ReadonlyArray<IRemote>
 
   /** The state of the current branch in relation to its upstream. */
   readonly aheadBehind: IAheadBehind | null

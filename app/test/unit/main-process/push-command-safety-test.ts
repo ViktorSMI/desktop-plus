@@ -11,6 +11,10 @@ class TestWindow {
     isDestroyed: () => false,
     send: (...args: unknown[]) => sent.push(args),
   }
+
+  public isVisible() {
+    return true
+  }
 }
 
 // Keep the real menu template and IPC event emitter; replace only Electron.

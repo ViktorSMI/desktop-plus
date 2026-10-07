@@ -60,6 +60,59 @@ describe('remote account preferences', () => {
     )
   })
 
+  it('returns no accounts for malformed HTTPS origins without throwing', () => {
+    for (const accounts of [[], [account('alice')]]) {
+      assert.deepEqual(
+        getAccountsForRemote(accounts, {
+          name: 'origin',
+          url: 'https://git.example.com:99999/owner/repo.git',
+        }),
+        []
+      )
+    }
+  })
+
+  it('keeps accounts on distinct HTTPS ports separate, including identical logins', () => {
+    const makeAccount = (port: string) =>
+      new Account(
+        'alice',
+        `https://git.example.com${port}/api/v3`,
+        'enterprise',
+        'token',
+        '',
+        0,
+        [],
+        '',
+        1,
+        'alice'
+      )
+    const standard = makeAccount('')
+    const custom = makeAccount(':8443')
+    const accounts = [standard, custom]
+
+    assert.deepEqual(
+      getAccountsForRemote(accounts, {
+        name: 'origin',
+        url: 'https://git.example.com:8443/alice/project.git',
+      }),
+      [custom]
+    )
+    assert.deepEqual(
+      getAccountsForRemote(accounts, {
+        name: 'origin',
+        url: 'https://git.example.com:443/alice/project.git',
+      }),
+      [standard]
+    )
+    assert.deepEqual(
+      getAccountsForRemote(accounts, {
+        name: 'origin',
+        url: 'https://git.example.com:9443/alice/project.git',
+      }),
+      []
+    )
+  })
+
   it('infers fork owners and the repository account for origin', () => {
     const accounts = [account('alice'), account('bob')]
 

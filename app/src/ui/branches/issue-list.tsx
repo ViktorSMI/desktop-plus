@@ -40,6 +40,7 @@ interface IIssueListState {
   readonly issues: ReadonlyArray<IIssueHit>
   readonly filterText: string
   readonly selectedItem: IIssueListItem | null
+  readonly failed: boolean
   readonly isLoading: boolean
   readonly screenReaderStateMessage: string | null
 }
@@ -63,11 +64,13 @@ export class IssueList extends React.Component<
   IIssueListState
 > {
   private unmounted = false
+  private requestId = 0
 
   public constructor(props: IIssueListProps) {
     super(props)
 
     this.state = {
+      failed: false,
       issues: [],
       filterText: '',
       selectedItem: null,
@@ -83,6 +86,7 @@ export class IssueList extends React.Component<
   public componentDidUpdate(prevProps: IIssueListProps) {
     if (prevProps.repository.hash !== this.props.repository.hash) {
       this.setState({
+        failed: false,
         issues: [],
         selectedItem: null,
         filterText: '',
@@ -94,6 +98,7 @@ export class IssueList extends React.Component<
 
   public componentWillUnmount() {
     this.unmounted = true
+    this.requestId++
   }
 
   private refreshIssues = async () => {
@@ -101,33 +106,57 @@ export class IssueList extends React.Component<
       return
     }
 
+    const requestId = ++this.requestId
     this.setState({
       isLoading: true,
+      failed: false,
       screenReaderStateMessage: 'Loading issues',
     })
 
     const repository = getNonForkGitHubRepository(this.props.repository)
-    await this.props.dispatcher.refreshIssues(repository)
+    const isCurrent = () => !this.unmounted && requestId === this.requestId
+    try {
+      // Show cached content even when the network refresh fails.
+      const cached = await this.props.issuesStore.getAllIssuesFor(repository)
+      if (!isCurrent()) {
+        return
+      }
+      this.setState({ issues: cached })
 
-    const issues = await this.props.issuesStore.getAllIssuesFor(repository)
-    if (this.unmounted) {
-      return
+      const refreshed = await this.props.dispatcher.refreshIssues(repository)
+      if (!refreshed) {
+        throw new Error('Unable to refresh issues')
+      }
+      const issues = await this.props.issuesStore.getAllIssuesFor(repository)
+      if (!isCurrent()) {
+        return
+      }
+
+      const selectedIssueNumber = this.state.selectedItem?.issue.number
+      const group = createListItems(issues)
+      const selectedItem =
+        selectedIssueNumber === undefined
+          ? null
+          : group.items.find(i => i.issue.number === selectedIssueNumber) ??
+            null
+
+      const plural = issues.length === 1 ? '' : 's'
+      this.setState({
+        issues,
+        selectedItem,
+        isLoading: false,
+        failed: false,
+        screenReaderStateMessage: `${issues.length} open issue${plural} found`,
+      })
+    } catch {
+      if (isCurrent()) {
+        this.setState({
+          isLoading: false,
+          failed: true,
+          screenReaderStateMessage: 'Unable to refresh issues',
+        })
+      }
     }
-
-    const selectedIssueNumber = this.state.selectedItem?.issue.number
-    const group = createListItems(issues)
-    const selectedItem =
-      selectedIssueNumber === undefined
-        ? null
-        : group.items.find(i => i.issue.number === selectedIssueNumber) ?? null
-
-    const plural = issues.length === 1 ? '' : 's'
-    this.setState({
-      issues,
-      selectedItem,
-      isLoading: false,
-      screenReaderStateMessage: `${issues.length} open issue${plural} found`,
-    })
   }
 
   public render() {
@@ -135,6 +164,20 @@ export class IssueList extends React.Component<
 
     return (
       <>
+        {this.state.failed && (
+          <div role="alert">
+            <p>
+              Unable to refresh issues. Previously loaded issues may be out of
+              date.
+            </p>
+            <Button
+              onClick={this.refreshIssues}
+              disabled={this.state.isLoading}
+            >
+              Retry
+            </Button>
+          </div>
+        )}
         <SectionFilterList<IIssueListItem>
           className="pull-request-list issue-list"
           rowHeight={RowHeight}
@@ -191,6 +234,8 @@ export class IssueList extends React.Component<
 
     let message = this.state.isLoading
       ? 'Loading issues…'
+      : this.state.failed
+      ? 'Unable to load issues.'
       : this.state.filterText.length > 0
       ? 'No issues match your filter.'
       : 'No open issues.'

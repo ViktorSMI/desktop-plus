@@ -79,10 +79,13 @@ export class IssueDetailDialog extends React.Component<
       this.setState({
         details: {
           ...details,
-          comments: [...details.comments].sort(
-            (a, b) =>
-              Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id
-          ),
+          comments: details.commentsError
+            ? this.state.details?.comments ?? []
+            : [...details.comments].sort(
+                (a, b) =>
+                  Date.parse(a.created_at) - Date.parse(b.created_at) ||
+                  a.id - b.id
+              ),
         },
         loading: false,
         failed: false,
@@ -168,6 +171,8 @@ export class IssueDetailDialog extends React.Component<
               key={`${repository.hash}-${issueNumber}`}
               repository={repository}
               details={details}
+              onRetryComments={this.loadDetails}
+              loading={loading}
               dispatcher={this.props.dispatcher}
               emoji={this.props.emoji}
               underlineLinks={this.props.underlineLinks}

@@ -5,6 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
+        For security vulnerabilities or other security-related concerns or questions, follow our [security policy](https://github.com/desktop/desktop/blob/development/SECURITY.md) instead of opening a public issue.
+
         Thanks for submitting a bug report! This issue tracker is for [Desktop Plus](https://github.com/desktop-plus/desktop-plus). Please search the issue tracker to see if there is an existing issue for the bug you are reporting.
   - type: checkboxes
     id: ai-policy-acknowledgement

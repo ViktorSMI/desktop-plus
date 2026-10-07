@@ -75,11 +75,7 @@ export async function push(
 
   const args =
     lease === undefined
-      ? [
-          'push',
-          remote.name,
-          remoteBranch ? `${localBranch}:${remoteBranch}` : localBranch,
-        ]
+      ? ['push']
       : [
           '-c',
           `remote.${remote.name}.mirror=false`,
@@ -88,9 +84,6 @@ export async function push(
           `--force-with-lease=refs/heads/${remoteBranch}:${lease.expectedRemoteTip}`,
         ]
 
-  if (tagsToPush !== null) {
-    args.push(...tagsToPush)
-  }
   if (!remoteBranch) {
     args.push('--set-upstream')
   } else if (options?.forceWithLease && lease === undefined) {
@@ -150,6 +143,16 @@ export async function push(
     // Pin the source too: a concurrent checkout/commit cannot send different work.
     // Explicit refspec + no-follow-tags + mirror=false restrict this to one branch.
     args.push('--', remote.name, `${lease.localTip}:refs/heads/${remoteBranch}`)
+  } else {
+    args.push(
+      '--',
+      remote.name,
+      remoteBranch ? `${localBranch}:${remoteBranch}` : localBranch
+    )
+
+    if (tagsToPush !== null) {
+      args.push(...tagsToPush)
+    }
   }
 
   await git(args, repository.path, 'push', opts)

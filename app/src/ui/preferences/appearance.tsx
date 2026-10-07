@@ -68,6 +68,8 @@ interface IAppearanceProps {
   ) => void
   readonly branchSortOrder: BranchSortOrder
   readonly onBranchSortOrderChanged: (sortOrder: BranchSortOrder) => void
+  readonly alwaysShowWorktreeList: boolean
+  readonly onAlwaysShowWorktreeListChanged: (value: boolean) => void
   readonly selectedDateFormat: DateFormat
   readonly onSelectedDateFormatChanged: (format: DateFormat) => void
   readonly selectedTimeFormat: TimeFormat
@@ -302,6 +304,12 @@ export class Appearance extends React.Component<
     this.props.onPreferAbsoluteDatesChanged(event.currentTarget.checked)
   }
 
+  private onAlwaysShowWorktreeListChanged = (
+    event: React.FormEvent<HTMLInputElement>
+  ) => {
+    this.props.onAlwaysShowWorktreeListChanged(event.currentTarget.checked)
+  }
+
   public renderThemeSwatch = (theme: ApplicationTheme) => {
     const darkThemeImage = encodePathAsUrl(__dirname, 'static/ghd_dark.svg')
     const lightThemeImage = encodePathAsUrl(__dirname, 'static/ghd_light.svg')
@@ -502,6 +510,17 @@ export class Appearance extends React.Component<
           />
 
           <Checkbox
+            className="always-show-worktree-list"
+            label="Always show worktree list"
+            value={
+              this.props.alwaysShowWorktreeList
+                ? CheckboxValue.On
+                : CheckboxValue.Off
+            }
+            onChange={this.onAlwaysShowWorktreeListChanged}
+          />
+
+          <Checkbox
             label="Show worktrees in repository list"
             value={
               this.state.showWorktreesInRepoList
@@ -633,7 +652,7 @@ export class Appearance extends React.Component<
 
         <Select
           value={this.state.selectedTabSize.toString()}
-          label={__DARWIN__ ? 'Tab Size' : 'Tab size'}
+          label={__DARWIN__ ? 'Diff Tab Size' : 'Diff tab size'}
           onChange={this.onSelectedTabSizeChanged}
         >
           {availableTabSizes.map(n => (

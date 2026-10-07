@@ -1426,7 +1426,7 @@ export class Dispatcher {
   }
 
   /** Update the repository's issues from GitHub. */
-  public refreshIssues(repository: GitHubRepository): Promise<void> {
+  public refreshIssues(repository: GitHubRepository): Promise<boolean> {
     return this.appStore._refreshIssues(repository)
   }
 
@@ -1909,6 +1909,11 @@ export class Dispatcher {
     return this.appStore._reportStats()
   }
 
+  /** Send the current stats without affecting the daily reporting schedule. */
+  public sendStats(): Promise<boolean> {
+    return this.appStore._sendStats()
+  }
+
   /** Changes the URL for the remote that matches the given name  */
   public setRemoteURL(
     repository: Repository,
@@ -2010,6 +2015,22 @@ export class Dispatcher {
     fullPath: string
   ): Promise<void> {
     return this.appStore._openInExternalEditor(repository, fullPath)
+  }
+
+  /** Open the selected checkout in the GitHub Copilot app. */
+  public async openInCopilotApp(repositoryPath: string): Promise<void> {
+    this.statsStore.increment('openInCopilotAppCount')
+
+    try {
+      await this.appStore._openInCopilotApp(repositoryPath)
+    } catch (error) {
+      await this.postError(error)
+    }
+  }
+
+  /** Set the configured GitHub Copilot app path used for repository handoff. */
+  public setCopilotAppPath(path: string | null): Promise<void> {
+    return this.appStore._setCopilotAppPath(path)
   }
 
   /**
@@ -4834,6 +4855,11 @@ export class Dispatcher {
 
   public setBranchSortOrder(branchSortOrder: BranchSortOrder) {
     return this.appStore._updateBranchSortOrder(branchSortOrder)
+  }
+
+  /** Set whether the worktree list is shown even without linked worktrees. */
+  public setAlwaysShowWorktreeList(alwaysShowWorktreeList: boolean) {
+    return this.appStore._setAlwaysShowWorktreeList(alwaysShowWorktreeList)
   }
 
   public setPreferAbsoluteDates(value: boolean) {

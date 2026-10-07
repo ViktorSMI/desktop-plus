@@ -29,6 +29,7 @@ import {
   getBinaryPaths,
   getBranchMergeBaseChangedFiles,
   getBranchMergeBaseDiff,
+  getCommitDiff,
   git,
 } from '../../../src/lib/git'
 import { getStatusOrThrow } from '../../helpers/status'
@@ -636,7 +637,7 @@ describe('git/diff', () => {
         repository,
         'master',
         'feature-branch',
-        'irrelevantToTest'
+        'feature-branch'
       )
 
       assert(changesetData !== null)
@@ -665,7 +666,7 @@ describe('git/diff', () => {
         repository,
         'master',
         'feature-branch',
-        'irrelevantToTest'
+        'feature-branch'
       )
 
       assert(changesetData === null)
@@ -673,6 +674,75 @@ describe('git/diff', () => {
   })
 
   describe('getBranchMergeBaseDiff', () => {
+    for (const change of ['modified', 'added', 'deleted', 'renamed'] as const) {
+      it(`uses the merge base for a ${change} binary before a text-only commit`, async t => {
+        const repository = await setupEmptyRepository(t)
+        const repoPath = repository.path
+        const before = Buffer.alloc(256)
+        const after = Buffer.from(before)
+        after[80] = 255
+        await writeFile(path.join(repoPath, 'data.bin'), before)
+        await exec(['add', '.'], repoPath)
+        await exec(['commit', '-m', 'base'], repoPath)
+        await exec(['branch', 'base'], repoPath)
+        if (change === 'deleted') {
+          await exec(['rm', 'data.bin'], repoPath)
+        } else if (change === 'renamed') {
+          await exec(['mv', 'data.bin', 'renamed.bin'], repoPath)
+          await writeFile(path.join(repoPath, 'renamed.bin'), after)
+        } else {
+          await writeFile(
+            path.join(repoPath, change === 'added' ? 'added.bin' : 'data.bin'),
+            after
+          )
+        }
+        await exec(['add', '.'], repoPath)
+        await exec(['commit', '-m', 'binary change'], repoPath)
+        const binaryCommit = (
+          await exec(['rev-parse', 'HEAD'], repoPath)
+        ).stdout.trim()
+        await makeCommit(repository, {
+          entries: [{ path: 'text.txt', contents: 'follow-up' }],
+        })
+        const changes = await getBranchMergeBaseChangedFiles(
+          repository,
+          'base',
+          'HEAD',
+          'HEAD'
+        )
+        assert(changes)
+        const file = changes.files.find(f => f.path.endsWith('.bin'))
+        assert(file)
+        const preview = await getBranchMergeBaseDiff(
+          repository,
+          file,
+          'base',
+          'HEAD',
+          false,
+          'HEAD'
+        )
+        const history = await getCommitDiff(repository, file, binaryCommit)
+        assert.equal(preview.kind, DiffType.Binary)
+        assert.equal(history.kind, DiffType.Binary)
+        if (
+          preview.kind !== DiffType.Binary ||
+          history.kind !== DiffType.Binary
+        ) {
+          return
+        }
+        assert.deepEqual(preview, history)
+        assert(preview.changeCount > 0)
+        assert.equal(
+          preview.previous?.loadedByteLength,
+          change === 'added' ? undefined : 256
+        )
+        assert.equal(
+          preview.current?.loadedByteLength,
+          change === 'deleted' ? undefined : 256
+        )
+      })
+    }
+
     it('loads the diff of a file between two branches if merged', async t => {
       const repoPath = await setupFixtureRepository(t, 'submodule-basic-setup')
       const repository = new Repository(repoPath, -1, null, false)
@@ -723,7 +793,7 @@ describe('git/diff', () => {
         'master',
         'feature-branch',
         false,
-        'irrelevantToTest'
+        'feature-branch'
       )
       assert.equal(diff.kind, DiffType.Text)
 

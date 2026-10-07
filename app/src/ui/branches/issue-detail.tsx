@@ -74,7 +74,7 @@ export class IssueDetail extends React.Component<
         onMarkdownLinkClicked={this.onMarkdownLinkClicked}
         underlineLinks={this.props.underlineLinks}
         customCSS={IssueMarkdownCSS}
-        ariaLabel={ariaLabel}
+        title={ariaLabel}
       />
     )
   }

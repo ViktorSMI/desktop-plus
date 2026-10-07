@@ -67,6 +67,10 @@
     }
   }
 
+  .always-show-worktree-list {
+    margin-top: var(--spacing);
+  }
+
   .accounts-tab {
     h2:not(:first-child) {
       margin-top: var(--spacing-double);

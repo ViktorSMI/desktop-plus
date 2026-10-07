@@ -43,6 +43,13 @@ export async function pull(
     remoteBranch?: string
   }
 ): Promise<void> {
+  // Git pull forwards the remote name to its child git fetch without a `--`
+  // separator. Reject leading dashes here even though direct fetch and push
+  // can handle them with a separator.
+  if (remote.name.startsWith('-')) {
+    throw new Error("Cannot pull from a remote whose name starts with '-'.")
+  }
+
   let opts: IGitStringExecutionOptions = {
     env: await envForRemoteOperation(
       remote.url,
@@ -106,6 +113,7 @@ export async function pull(
     '--recurse-submodules',
     ...(options?.progressCallback ? ['--progress'] : []),
     ...(options?.noVerify ? ['--no-verify'] : []),
+    '--',
     remote.name,
     ...(options?.remoteBranch ? [options.remoteBranch] : []),
   ]

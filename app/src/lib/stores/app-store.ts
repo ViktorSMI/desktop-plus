@@ -107,7 +107,7 @@ import {
 } from '../../models/pull-request'
 import {
   forkPullRequestRemoteName,
-  ForkedRemotePrefix,
+  getUserRemotes,
   IRemote,
   remoteEquals,
 } from '../../models/remote'
@@ -1655,6 +1655,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
       aheadBehind: gitStore.aheadBehind,
       tagsToPush: gitStore.tagsToPush,
       remote: gitStore.currentRemote,
+      remotes: gitStore.remotes,
       lastFetched: gitStore.lastFetched,
     }))
 
@@ -6266,14 +6267,18 @@ export class AppStore extends TypedBaseStore<IAppState> {
           throw new Error('Check out a local branch before syncing remotes.')
         }
 
-        const remotes = (await getRemotes(repository)).filter(
-          remote => !remote.name.startsWith(ForkedRemotePrefix)
-        )
+        const remotes = getUserRemotes(await getRemotes(repository))
 
         if (remotes.length !== 2) {
-          throw new Error(
-            `Sync both remotes requires exactly two user remotes; found ${remotes.length}.`
-          )
+          // Remotes may have changed since the toolbar was rendered. Restore
+          // ordinary toolbar actions rather than leaving a saved Sync preference
+          // trapping the user in a failing operation.
+          await this._updateRepositoryWorkflowPreferences(repository, {
+            ...repository.workflowPreferences,
+            syncRemotes: false,
+          })
+          await this._refreshRepository(repository)
+          return
         }
 
         const branchName = tip.branch.nameWithoutRemote

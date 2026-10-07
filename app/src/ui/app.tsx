@@ -1,3 +1,4 @@
+import { canSyncRemotes } from '../models/remote'
 import { ActionsRunDialog } from './actions/actions-run-dialog'
 import { CommitActionsDialog } from './actions/commit-actions-dialog'
 import * as Path from 'path'
@@ -4149,7 +4150,8 @@ export class App extends React.Component<IAppProps, IAppState> {
         lastFetched={state.lastFetched}
         networkActionInProgress={state.isPushPullFetchInProgress}
         syncRemotes={
-          selection.repository.workflowPreferences.syncRemotes === true
+          selection.repository.workflowPreferences.syncRemotes === true &&
+          canSyncRemotes(state.remotes)
         }
         progress={progress}
         tipState={tip.kind}

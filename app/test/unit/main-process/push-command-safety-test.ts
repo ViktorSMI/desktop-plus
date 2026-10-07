@@ -7,13 +7,13 @@ class TestWindow {
     return [new TestWindow()]
   }
 
-  public isVisible() {
-    return true
-  }
-
   public readonly webContents = {
     isDestroyed: () => false,
     send: (...args: unknown[]) => sent.push(args),
+  }
+
+  public isVisible() {
+    return true
   }
 }
 

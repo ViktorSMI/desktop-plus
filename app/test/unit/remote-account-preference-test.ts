@@ -60,6 +60,18 @@ describe('remote account preferences', () => {
     )
   })
 
+  it('returns no accounts for malformed HTTPS origins without throwing', () => {
+    for (const accounts of [[], [account('alice')]]) {
+      assert.deepEqual(
+        getAccountsForRemote(accounts, {
+          name: 'origin',
+          url: 'https://git.example.com:99999/owner/repo.git',
+        }),
+        []
+      )
+    }
+  })
+
   it('keeps accounts on distinct HTTPS ports separate, including identical logins', () => {
     const makeAccount = (port: string) =>
       new Account(

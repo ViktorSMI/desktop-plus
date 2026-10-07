@@ -42,7 +42,14 @@ export function getAccountsForRemote(
     return []
   }
 
-  const remoteOrigin = new URL(remote.url).origin
+  let remoteOrigin: string
+  try {
+    remoteOrigin = new URL(remote.url).origin
+  } catch {
+    // The Git remote parser can accept strings rejected by the URL parser,
+    // such as an out-of-range HTTPS port. Treat these as unroutable.
+    return []
+  }
 
   return accounts.filter(account => {
     try {

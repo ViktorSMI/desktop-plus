@@ -176,16 +176,24 @@ export async function getBranchMergeBaseDiff(
   hideWhitespaceInDiff: boolean = false,
   latestCommit: string
 ): Promise<IDiff> {
+  const mergeBase = await getMergeBase(
+    repository,
+    baseBranchName,
+    comparisonBranchName
+  )
+  if (mergeBase === null) {
+    throw new Error('Cannot preview branches without a common ancestor')
+  }
+
   const args = [
     'diff',
-    '--merge-base',
     ...(hideWhitespaceInDiff ? ['-w'] : []),
     '--patch-with-raw',
     '-z',
     '--no-color',
     '--end-of-options',
-    baseBranchName,
-    comparisonBranchName,
+    mergeBase,
+    latestCommit,
     '--',
     ensureRelativePath(file.path),
   ]
@@ -201,7 +209,15 @@ export async function getBranchMergeBaseDiff(
     encoding: 'buffer',
   })
 
-  return buildDiff(result.stdout, repository, file, latestCommit, latestCommit)
+  return buildDiff(
+    result.stdout,
+    repository,
+    file,
+    latestCommit,
+    latestCommit,
+    undefined,
+    mergeBase
+  )
 }
 
 /**
@@ -282,8 +298,8 @@ export async function getBranchMergeBaseChangedFiles(
     '--raw',
     '--numstat',
     '--end-of-options',
-    baseBranchName,
-    comparisonBranchName,
+    mergeBase,
+    latestCommit,
     '--',
   ]
 
@@ -674,7 +690,8 @@ async function getBinaryDiff(
   repository: Repository,
   file: FileChange,
   newestCommitish: string,
-  oldestCommitish: string
+  oldestCommitish: string,
+  baseCommitish?: string
 ): Promise<IBinaryDiff> {
   let current: IBinaryBufferContents | undefined = undefined
   let previous: IBinaryBufferContents | undefined = undefined
@@ -720,7 +737,7 @@ async function getBinaryDiff(
       previous = await getBlobBinaryContents(
         repository,
         getOldPathOrDefault(file),
-        `${oldestCommitish}^`
+        baseCommitish ?? `${oldestCommitish}^`
       )
     }
 
@@ -731,7 +748,7 @@ async function getBinaryDiff(
       previous = await getBlobBinaryContents(
         repository,
         getOldPathOrDefault(file),
-        file.parentCommitish
+        baseCommitish ?? file.parentCommitish
       )
     }
   }
@@ -765,7 +782,8 @@ async function getImageDiff(
   repository: Repository,
   file: FileChange,
   newestCommitish: string,
-  oldestCommitish: string
+  oldestCommitish: string,
+  baseCommitish?: string
 ): Promise<IImageDiff> {
   let current: Image | undefined = undefined
   let previous: Image | undefined = undefined
@@ -815,7 +833,7 @@ async function getImageDiff(
       previous = await getBlobImage(
         repository,
         getOldPathOrDefault(file),
-        `${oldestCommitish}^`
+        baseCommitish ?? `${oldestCommitish}^`
       )
     }
 
@@ -826,7 +844,7 @@ async function getImageDiff(
       previous = await getBlobImage(
         repository,
         getOldPathOrDefault(file),
-        file.parentCommitish
+        baseCommitish ?? file.parentCommitish
       )
     }
   }
@@ -844,7 +862,8 @@ export async function convertDiff(
   diff: IRawDiff,
   newestCommitish: string,
   oldestCommitish: string,
-  lineEndingsChange?: LineEndingsChange
+  lineEndingsChange?: LineEndingsChange,
+  baseCommitish?: string
 ): Promise<IDiff> {
   const extension = Path.extname(file.path).toLowerCase()
 
@@ -855,7 +874,8 @@ export async function convertDiff(
       repository,
       file,
       newestCommitish,
-      oldestCommitish
+      oldestCommitish,
+      baseCommitish
     )
     if (!diff.isBinary) {
       return {
@@ -875,9 +895,21 @@ export async function convertDiff(
   if (diff.isBinary) {
     // some extension we don't know how to parse, never mind
     if (!imageFileExtensions.has(extension)) {
-      return getBinaryDiff(repository, file, newestCommitish, oldestCommitish)
+      return getBinaryDiff(
+        repository,
+        file,
+        newestCommitish,
+        oldestCommitish,
+        baseCommitish
+      )
     } else {
-      return getImageDiff(repository, file, newestCommitish, oldestCommitish)
+      return getImageDiff(
+        repository,
+        file,
+        newestCommitish,
+        oldestCommitish,
+        baseCommitish
+      )
     }
   }
 
@@ -1026,7 +1058,8 @@ async function buildDiff(
   file: FileChange,
   newestCommitish: string,
   oldestCommitish: string,
-  lineEndingsChange?: LineEndingsChange
+  lineEndingsChange?: LineEndingsChange,
+  baseCommitish?: string
 ): Promise<IDiff> {
   if (file.status.submoduleStatus !== undefined) {
     return buildSubmoduleDiff(
@@ -1066,7 +1099,8 @@ async function buildDiff(
     diff,
     newestCommitish,
     oldestCommitish,
-    lineEndingsChange
+    lineEndingsChange,
+    baseCommitish
   )
 }
 

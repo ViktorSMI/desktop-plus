@@ -42,14 +42,11 @@ export function getAccountsForRemote(
     return []
   }
 
-  const remoteHost = parsed.hostname.toLowerCase()
+  const remoteOrigin = new URL(remote.url).origin
 
   return accounts.filter(account => {
     try {
-      return (
-        new URL(getHTMLURL(account.endpoint)).hostname.toLowerCase() ===
-        remoteHost
-      )
+      return new URL(getHTMLURL(account.endpoint)).origin === remoteOrigin
     } catch {
       return false
     }

@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
-const packager = require('@electron/packager')
+const { packager } = require('@electron/packager')
 const installer = require('electron-winstaller')
 const ts = require('typescript')
 if (

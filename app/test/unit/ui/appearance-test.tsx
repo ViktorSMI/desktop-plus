@@ -1,5 +1,5 @@
 import assert from 'node:assert'
-import { describe, it } from 'node:test'
+import { after, before, describe, it } from 'node:test'
 import * as React from 'react'
 import { render, screen, fireEvent } from '../../helpers/ui/render'
 import { Appearance } from '../../../src/ui/preferences/appearance'
@@ -59,6 +59,37 @@ function renderAppearance(alwaysShowWorktreeList = false) {
 }
 
 describe('Appearance preferences', () => {
+  const originalFonts = Object.getOwnPropertyDescriptor(document, 'fonts')
+  const originalQuery = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'queryLocalFonts'
+  )
+
+  before(() => {
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { check: () => false },
+    })
+    Object.defineProperty(globalThis, 'queryLocalFonts', {
+      configurable: true,
+      value: async () => [],
+    })
+  })
+  after(async () => {
+    // Let Appearance finish its deferred font discovery before restoring APIs.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    if (originalFonts) {
+      Object.defineProperty(document, 'fonts', originalFonts)
+    } else {
+      Reflect.deleteProperty(document, 'fonts')
+    }
+    if (originalQuery) {
+      Object.defineProperty(globalThis, 'queryLocalFonts', originalQuery)
+    } else {
+      Reflect.deleteProperty(globalThis, 'queryLocalFonts')
+    }
+  })
+
   it('shows the always-show preference with the fork worktree settings', () => {
     renderAppearance()
 

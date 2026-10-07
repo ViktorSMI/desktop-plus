@@ -37,7 +37,9 @@ describe('saved sync preference recovery', () => {
           url: `https://example.com/${name}`,
         })),
       }
-      render(container['renderRemoteSwitcher']())
+      const switcher = container['renderRemoteSwitcher']()
+      assert(switcher)
+      render(switcher)
       const toggle = screen.getByRole('checkbox', {
         name: 'Sync with toolbar (requires exactly two user remotes)',
       })

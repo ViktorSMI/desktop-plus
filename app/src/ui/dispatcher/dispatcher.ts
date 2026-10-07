@@ -1426,7 +1426,7 @@ export class Dispatcher {
   }
 
   /** Update the repository's issues from GitHub. */
-  public refreshIssues(repository: GitHubRepository): Promise<void> {
+  public refreshIssues(repository: GitHubRepository): Promise<boolean> {
     return this.appStore._refreshIssues(repository)
   }
 

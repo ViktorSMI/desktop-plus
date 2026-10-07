@@ -563,6 +563,8 @@ export interface IAPIIssue {
 export interface IAPIIssueDetails {
   readonly issue: IAPIIssue
   readonly comments: ReadonlyArray<IAPIComment>
+  /** Comments could not be refreshed; the issue itself is still available. */
+  readonly commentsError?: boolean
 }
 
 /** The combined state of a ref. */
@@ -2403,7 +2405,7 @@ export class API {
         `failed fetching issue comments for ${owner}/${name}/issues/${issueNumber}`,
         e
       )
-      return []
+      throw e
     }
   }
 
@@ -4633,7 +4635,7 @@ export class GitLabAPI extends API {
         `failed fetching issue comments for ${owner}/${name}/issues/${issueNumber}`,
         e
       )
-      return []
+      throw e
     }
   }
 

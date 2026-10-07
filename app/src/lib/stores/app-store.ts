@@ -2876,13 +2876,15 @@ export class AppStore extends TypedBaseStore<IAppState> {
     )
 
     if (!user) {
-      return
+      return false
     }
 
     try {
       await this.issuesStore.refreshIssues(repository, user)
+      return true
     } catch (e) {
       log.warn(`Unable to fetch issues for ${repository.fullName}`, e)
+      return false
     }
   }
 
@@ -2911,13 +2913,20 @@ export class AppStore extends TypedBaseStore<IAppState> {
       return null
     }
 
-    const comments = await api.fetchIssueComments(
-      repository.owner.login,
-      repository.name,
-      issueNumber.toString()
-    )
-
-    return { issue, comments }
+    try {
+      const comments = await api.fetchIssueComments(
+        repository.owner.login,
+        repository.name,
+        issueNumber.toString()
+      )
+      return { issue, comments }
+    } catch (e) {
+      log.warn(
+        `Unable to fetch comments for ${repository.fullName}#${issueNumber}`,
+        e
+      )
+      return { issue, comments: [], commentsError: true }
+    }
   }
 
   private stopBackgroundFetching() {

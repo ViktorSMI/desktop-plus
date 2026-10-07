@@ -85,7 +85,7 @@ export class IssuesStore {
       lastUpdatedAt
     )
 
-    this.storeIssues(issues, repository)
+    await this.storeIssues(issues, repository)
   }
 
   private async storeIssues(

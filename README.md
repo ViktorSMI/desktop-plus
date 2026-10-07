@@ -29,238 +29,25 @@ This is an **up-to-date** fork of [GitHub Desktop](https://desktop.github.com) w
 
 ## Download and Installation 📦
 
+Download this fork from the [ViktorSMI/desktop-plus releases page](https://github.com/ViktorSMI/desktop-plus/releases). Choose the release channel and asset for your operating system and architecture.
+
+Packages distributed by upstream Desktop Plus through Winget, Homebrew, APT, RPM, AUR, Flathub, or AM/AppMan install the upstream application, not this fork. This fork does not currently publish its own packages through those channels.
+
 ### Windows
 
-<details>
-<summary>Click to expand</summary>
+Use the `.exe` installer for your architecture. Installed Windows builds using Squirrel support automatic updates from this fork's release feed, including downloading and applying the update. Restart when prompted to finish installing it.
 
-#### Option 1: Using Winget (Recommended)
-
-```powershell
-winget install DesktopPlus.DesktopPlus
-```
-
-To update, run `winget upgrade DesktopPlus.DesktopPlus` or `winget upgrade --all` to update all your winget packages. Make sure to update regularly to get the latest features and fixes.
-
-#### Option 2: Manual download (Not recommended)
-
-Download and execute the installer from the [releases page](https://github.com/desktop-plus/desktop-plus/releases/latest).
-
-| | **64-bit x86** | **64-bit ARM** |
-| --- | --- | --- |
-| **.EXE Installer** | `-win-x64.exe` | `-win-arm64.exe` |
-| **.MSI Installer ⚠️** | `-win-x64.msi` | `-win-arm64.msi` |
-
-Please note that the app doesn't auto-update like the official GitHub Desktop, so you will need to manually download and install it every time you want to update.  
-For this reason, **I recommend using Winget instead of the manual download**.
-
-⚠️ The MSI installer is meant for enterprise deployments and is not recommended for regular users. If you want to use it, keep in mind that you will need to reboot your computer to finish the installation. The MSI installer only registers a hook that will install the app on login.
-
----
-
-</details>
+Portable builds require a manual download and replacement. MSI packages, when provided, are intended for enterprise deployment; use the regular installer for a Squirrel-managed installation.
 
 ### macOS
 
-<details>
-<summary>Click to expand</summary>
+Download and extract the ZIP for Intel (`x64`) or Apple Silicon (`arm64`). Updates require manually downloading and installing the new release. The app can notify you of a newer release and open its download page, but does not install macOS updates automatically.
 
-#### Option 1: Using Homebrew (Recommended)
+### Linux
 
-```bash
-brew install desktop-plus/tap/desktop-plus
-```
+Download a compatible asset from this fork's releases. Updates require manually downloading and installing the new release; update notifications link to the release page.
 
-Make sure to run `brew update` + `brew upgrade` regularly to get the latest updates for Desktop Plus.
-
-#### Option 2: Manual download (Not recommended)
-
-Download and extract the ZIP file from the [releases page](https://github.com/desktop-plus/desktop-plus/releases/latest). Click the app file to run it.  
-If you encounter the error "Apple could not verify this app is free of malware", go to "System Settings" > "Privacy & Security", scroll down to "Security" and click "Open Anyway" on "Desktop Plus".
-
-| **64-bit x86** | **64-bit ARM (Apple Silicon)** |
-| --- | --- |
-| `-macOS-x64.zip` | `-macOS-arm64.zip` |
-
-Please note that the app doesn't auto-update like the official GitHub Desktop, so you will need to manually download it every time you want to update.  
-For this reason, I recommend using Homebrew instead of the manual download.
-
----
-
-</details>
-
-### Debian · Ubuntu · Mint · Pop!_OS · Zorin · elementary OS (APT)
-
-<details>
-
-<summary>Click to expand</summary>
-<br>
-
-Create the repository file:
-
-```bash
-sudo curl https://gpg.desktop-plus.org/public.key | sudo gpg --dearmor -o /usr/share/keyrings/desktop-plus.gpg
-echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/desktop-plus.gpg] https://apt.desktop-plus.org/ stable main" | sudo tee /etc/apt/sources.list.d/desktop-plus.list
-```
-
-Update the package list and install:
-```bash
-sudo apt update
-sudo apt install desktop-plus
-```
-
----
-
-</details>
-
-
-### Fedora · RHEL · CentOS Stream · Rocky Linux · AlmaLinux (RPM)
-
-<details>
-<summary>Click to expand</summary>
-
-#### Option 1: Using the official repository (Recommended)
-
-Create the repository file:
-
-```bash
-sudo rpm --import https://gpg.desktop-plus.org/public.key
-echo -e "[desktop-plus]\nname=Desktop Plus\nbaseurl=https://rpm.desktop-plus.org/\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://gpg.desktop-plus.org/public.key" | sudo tee /etc/yum.repos.d/desktop-plus.repo
-```
-
-Update the package list and install:
-
-```bash
-sudo dnf check-update --refresh
-sudo dnf install desktop-plus
-```
-
-#### Option 2: Using [Terra](https://terrapkg.com/)
-
-Make sure you have [installed](https://docs.terrapkg.com/usage/installing/) or enabled the Terra repository. Then, run:
-```bash
-sudo dnf install desktop-plus-bin
-```
-
-> **Note:** The Terra package is unofficial. Use at your own risk.
-
-
----
-
-</details>
-
-### OpenSUSE (RPM)
-
-<details>
-<summary>Click to expand</summary>
-<br>
-
-Create the repository file:
-
-```bash
-sudo rpm --import https://gpg.desktop-plus.org/public.key
-echo -e "[desktop-plus]\nname=Desktop Plus\nbaseurl=https://rpm.desktop-plus.org/\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://gpg.desktop-plus.org/public.key" | sudo tee /etc/zypp/repos.d/desktop-plus.repo
-```
-
-Update the package list and install:
-
-```bash
-sudo zypper refresh
-sudo zypper install desktop-plus
-```
-
----
-
-</details>
-
-
-### Arch Linux · EndeavourOS · Garuda Linux · Manjaro (AUR)
-
-<details>
-<summary>Click to expand</summary>
-<br>
-
-Simply install `desktop-plus-bin` from the AUR using your preferred AUR helper.
-
-```sh
-yay -S desktop-plus-bin
-```
-
-You can also build from source by installing `desktop-plus` or `desktop-plus-git` from the AUR.
-
-> `gnome-keyring` is required and the daemon must be launched either at login or when the X server / Wayland compositor is started. Normally this is handled by a display manager, but in other cases following the instructions found on the [Arch Wiki](https://wiki.archlinux.org/index.php/GNOME/Keyring#Using_the_keyring_outside_GNOME) will fix the issue of not being able to save login credentials.
-
----
-
-</details>
-
-
-### Flatpak (any distro)
-
-<details>
-<summary>Click to expand</summary>
-<br>
-
-Simply install Desktop Plus from [Flathub](https://flathub.org/en/apps/org.desktop_plus.desktop-plus):
-
-```bash
-flatpak install flathub org.desktop_plus.desktop-plus
-```
-
-> **NOTE:** Git hooks will run inside the Flatpak sandbox and cannot access programs installed on your system (such as version managers,
-> linters, or other tools your hooks rely on). If your hooks depend on such programs, install a native package instead.
-
----
-
-</details>
-
-### AppImage (any distro, not recommended)
-
-<details>
-<summary>Click to expand</summary>
-<br>
-
-**IMPORTANT:** I strongly recommend using your distribution's native package (APT, RPM, and AUR packages above) or Flatpak instead of the AppImage, as it requires some manual setup for the sign-in feature to work.  
-If you need to use the AppImage, follow these steps:
-1. Manually [create a `desktop-plus.desktop` entry](https://wiki.archlinux.org/title/Desktop_entries).
-2. Link the MIME type:
-   ```sh
-   xdg-mime default desktop-plus.desktop x-scheme-handler/x-github-desktop-auth
-   ```
-
-- *Desktop notifications* require `libnotify` to be installed on your system. Some desktops already pull it in, but others (like KDE Plasma) don't include it by default.  
-  If you are on Debian, Ubuntu, or similar distributions, the package is called `libnotify4`. In other distros it's called `libnotify`.
-
-#### Option 1: Using ["AM"/"AppMan"](https://github.com/ivan-hc/AM)
-
-```bash
-# If using "AM":
-am install github-desktop-plus
-# If using "AppMan":
-appman install github-desktop-plus
-```
-
-> **Note:** The AM/AppMan package is unofficial. Use at your own risk.
-
-#### Option 2: Manual download (Not recommended)
-
-Download the AppImage from the [releases page](https://github.com/desktop-plus/desktop-plus/releases/latest):
-
-| **64-bit x86** | **64-bit ARM** |
-| --- | --- |
-| `-linux-x86_64.AppImage` | `-linux-arm64.AppImage` |
-
-Then, make it executable:
-
-```bash
-chmod +x DesktopPlus-*-linux-*.AppImage
-```
-
-Finally, double-click the .AppImage file to run it.
-
----
-
-</details>
+For an AppImage, make the downloaded file executable before running it. Sign-in may require a desktop entry registering the `x-github-desktop-auth` URL scheme. Linux credential storage requires an available Secret Service implementation such as `gnome-keyring`; desktop notifications may require `libnotify`.
 
 ## Common issues 🛠️
 

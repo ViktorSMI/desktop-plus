@@ -298,8 +298,8 @@ export async function getBranchMergeBaseChangedFiles(
     '--raw',
     '--numstat',
     '--end-of-options',
-    mergeBase,
-    latestCommit,
+    baseBranchName,
+    comparisonBranchName,
     '--',
   ]
 
